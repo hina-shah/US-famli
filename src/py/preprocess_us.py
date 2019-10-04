@@ -150,3 +150,4 @@ def extractImageArrayFromUS(file_path, out_dir, rescale_size):
         us_model = ds['0008', '1090'].value
     
     return np_frame, us_type, us_model
+    
