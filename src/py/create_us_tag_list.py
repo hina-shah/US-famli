@@ -7,15 +7,58 @@ from argparse import ArgumentParser
 from pprint import pprint
 import logging
 import sys
+import concurrent.futures
 import preprocessus
 import extracttagtext
+
+def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us, tag_bounding_box):
+    tag_statistic = dict.fromkeys(tag_list, 0)
+    tag_statistic['Unknown'] = 0
+    tag_statistic['Undecided'] = 0
+    tag_statistic['No tag'] = 0
+    
+    subject_id = study.name 
+    study_path = study.parent
+    study_path_relative = study_path.relative_to(data_folder)
+    logging.info("=========== PROCESSING SUBJECT: {} ===============".format(subject_id))
+    out_dir = out_images_dir  / study_path_relative / subject_id
+    preprocessus.checkDir(out_dir)
+    
+    csv_file = open(str(out_dir / 'info.csv'), 'w')
+    field_names = ['File', 'type', 'tag']
+    csvfilewriter = csv.DictWriter(csv_file, field_names)
+    csvfilewriter.writeheader()
+    
+    i=1
+    file_names = list( study.glob('**/*.dcm') )
+    
+    for file_name in file_names:
+
+        logging.debug("FILE {}: {}".format(i, str(file_name)))
+        logging.debug(str(file_name))
+        np_frame, us_type, capture_model = preprocessus.extractImageArrayFromUS(file_name, out_dir, None)
+        
+        # Extract text from the image
+        tag = 'Unknown'
+        if us_type not in non_tag_us and capture_model in tag_bounding_box.keys():
+            tag = extracttagtext.extractTagFromFrame(np_frame, tag_bounding_box[capture_model], tag_list)
+        tag_statistic[tag] += 1
+        
+        if len(capture_model)>0 and capture_model not in tag_bounding_box.keys():
+            logging.warning('US Model: {} was not found for file: {}'.format(capture_model, file_name))
+
+        csvfilewriter.writerow({'File': str(file_name), 'type': us_type, 'tag': tag})
+        i+=1
+    csv_file.close()
+    return tag_statistic
+
 
 def main(args):
     data_folder = Path(args.dir)
     out_images_dir = Path(args.out_dir)
 
     preprocessus.checkDir(out_images_dir, False)    
-    logging.basicConfig(level=logging.INFO, filename=str(out_images_dir / 'log.txt'))
+    logging.basicConfig(level=logging.INFO, filename=out_images_dir/'log.txt')
 
     studies = []
     for dirname, dirnames, __ in os.walk(str(data_folder)):
@@ -23,6 +66,7 @@ def main(args):
             studies.append(Path(dirname))
             
     logging.info('Found {} studies '.format(len(studies)))
+    print('Found {} studies '.format(len(studies)))
     # subjects = ["UNC-0414-1_20190830_111550", 
     #             "UNC-0414-2_20190924_085140",
     #             "UNC-0366-3_20190927_093424",
@@ -57,45 +101,22 @@ def main(args):
     tag_statistic['Undecided'] = 0
     tag_statistic['No tag'] = 0
 
-    # Start processing all
-    preprocessus.checkDir(out_images_dir, False)
-    for study in studies:
-        subject_id = study.name 
-        study_path = study.parent
-        study_path_relative = study_path.relative_to(data_folder)
-        logging.info("=========== PROCESSING SUBJECT: {} ===============".format(subject_id))
-        out_dir = out_images_dir  / study_path_relative / subject_id
-        preprocessus.checkDir(out_dir)
-        
-        csv_file = open(str(out_dir / 'info.csv'), 'w')
-        field_names = ['File', 'type', 'tag']
-        csvfilewriter = csv.DictWriter(csv_file, field_names)
-        csvfilewriter.writeheader()
-        
-        i=1
-        file_names = list( study.glob('**/*.dcm') )
-        
-        for file_name in file_names:
-
-            logging.debug("============ FILE {} ==================== ".format(i))
-            logging.debug(str(file_name))
-            np_frame, us_type, capture_model = preprocessus.extractImageArrayFromUS(file_name, out_dir, None)
-            
-            # Extract text from the image
-            tag = 'Unknown'
-            if us_type not in non_tag_us and capture_model in tag_bounding_box.keys():
-                tag = extracttagtext.extractTagFromFrame(np_frame, tag_bounding_box[capture_model], tag_list)
-            tag_statistic[tag] += 1
-            
-            if capture_model not in tag_bounding_box.keys():
-                logging.warning('========= US Model: {} was not found ========='.format(capture_model))
-
-            csvfilewriter.writerow({'File': str(file_name), 'type': us_type, 'tag': tag})
-            i+=1
-        csv_file.close()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Start the load operations and mark each future with its URL
+        future_tags = {executor.submit(extractTagForStudy, study, 
+                                         data_folder, out_images_dir, tag_list,
+                                         non_tag_us, tag_bounding_box): study for study in studies}
+        for future in concurrent.futures.as_completed(future_tags):
+            d = future_tags[future] 
+            logging.info('Finished processing: {}'.format(d))
+            this_tag_statistic = future.result()
+            logging.info(future.result())
+            for key, value in this_tag_statistic.items():
+                tag_statistic[key] += value
 
     pprint(tag_statistic)
     logging.info('---- DONE ----')
+    print('------DONE-----------')
 
 
 if __name__=="__main__":
