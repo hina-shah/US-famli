@@ -3,7 +3,7 @@ from pathlib import Path
 import pydicom
 import numpy as np
 import os
-import itk
+import SimpleITK as sitk
 import shutil
 import logging
 from PIL import Image,ImageFile
@@ -11,9 +11,10 @@ from PIL import Image,ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def writeImage(np_image, out_path):
-    itk_image = itk.GetImageFromArray(np.ascontiguousarray(np_image))
-    itk.imwrite(itk_image, str(out_path))
-    del itk_image
+    sim = sitk.GetImageFromArray(np_image)
+    sitk.WriteImage(sim, str(out_path))
+    del sim
+
 
 def extractUSCineFrame(ds, out_path, out_size):   
    
@@ -54,20 +55,28 @@ def extractUSImage(file_path, ds, out_path, out_size):
         # However, converting the numpy array to itk image creates itkImageUC3
         # which is inconsistent with the itkRGBUC2 that the grayscale image filter
         # is expecting..
-        itk_image = itk.imread(str(file_path))
-        lumfilter = itk.RGBToLuminanceImageFilter.New(Input=itk_image)
-        itk_image = lumfilter.GetOutput()
-        # Turn the image to to numpy array to squeeze the extra dimension
-        # TODO: how do I squeeze a hanging dimension in ITK itself?    
-        np_image = itk.GetArrayFromImage(itk_image)
-        np_image = np.squeeze(np_image)
-        del itk_image
-    else:
+        np_image = np.dot(ds.pixel_array, [0.2989, 0.5870, 0.1140])
+        # ImageType = itk.Image[itk.RGBPixel[itk.UC3],3]
+        # itk_image = itk.PyBuffer[ImageType].GetImageFromArray(np.ascontiguousarray(np_image))
+        # lumfilter = itk.RGBToLuminanceImageFilter.New(Input = itk_image)
+        # #itk_image = itk.imread(str(file_path))
+        # #lumfilter = itk.RGBToLuminanceImageFilter.New(Input=itk_image)
+        # itk_image = lumfilter.GetOutput()
+        # # Turn the image to to numpy array to squeeze the extra dimension
+        # # TODO: how do I squeeze a hanging dimension in ITK itself?    
+        # np_image = itk.GetArrayFromImage(itk_image)
+        
+        np_image = np.squeeze(np_image.astype(np.uint8))
+        #del itk_image
+    elif photometric_interpretation == "YBR_FULL_422":
+        np_image = np.squeeze(ds.pixel_array[:,:,0])
+    elif photometric_interpretation == "MONOCHROME2":
         # Get numpy array
-        np_image = ds.pixel_array
-        np_image = np.squeeze(np_image)
-
-
+        np_image = np.squeeze(ds.pixel_array)
+    else:
+        logging.warning('UNSUPPORTED PHOTOMETRIC INTERPRETATION: ' + photometric_interpretation)
+        return None
+        
     if out_path is not None:
         writeImage(np_image, out_path)
 

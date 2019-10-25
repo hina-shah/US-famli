@@ -11,6 +11,7 @@ import gc
 import concurrent.futures
 import preprocessus
 import extracttagtext
+import time
 
 def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us, tag_bounding_box):
     tag_statistic = dict.fromkeys(tag_list, 0)
@@ -35,14 +36,23 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
     
     for file_name in file_names:
 
+        start = time.time()
         logging.debug("FILE {}: {}".format(i, str(file_name)))
         logging.debug(str(file_name))
         np_frame, us_type, capture_model = preprocessus.extractImageArrayFromUS(file_name, out_dir, None)
-        
+        end = time.time()
+        logging.debug('Preprocessing took : {} seconds'.format(end-start))
+
         # Extract text from the image
+        start = time.time()
         tag = 'Unknown'
-        if us_type not in non_tag_us and capture_model in tag_bounding_box.keys():
+        if np_frame is not None and \
+            us_type not in non_tag_us and\
+            capture_model in tag_bounding_box.keys():
+
             tag = extracttagtext.extractTagFromFrame(np_frame, tag_bounding_box[capture_model], tag_list)
+        end = time.time()
+        logging.debug('Tag extraction took : {} seconds'.format(end-start))
         tag_statistic[tag] += 1
         del np_frame
 
@@ -87,7 +97,8 @@ def main(args):
     # Approximate bounding box of where the tag is written acoording to the 
     # us model
     tag_bounding_box = { 'V830':[[40,75], [255,190]],
-                        'LOGIQe':  [[0,55], [200,160]]}
+                        'LOGIQe':  [[0,55], [200,160]],
+                         'Voluson S': [[40,75], [255,190]]}
 
     # list of ultrasound image types whose tags we do not care about right now.
     non_tag_us = ['Unknown', 'ge kretz image', 'Secondary capture image report',
@@ -122,11 +133,15 @@ def main(args):
                 for key, value in this_tag_statistic.items():
                     tag_statistic[key] += value
     else:
+        i=1
         for study in studies:
             this_tag_statistic = extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us, tag_bounding_box)
             logging.info('Finished processing: {}'.format(study))
             for key, value in this_tag_statistic.items():
                 tag_statistic[key] += value
+            endstr = "\n" if i%50 == 0 else "."
+            print("",end=endstr)
+            i+=1
     
     pprint(tag_statistic)
     logging.info('---- DONE ----')

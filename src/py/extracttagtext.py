@@ -45,9 +45,12 @@ def extractTagFromFrame(np_frame, bounding_box, tag_list):
 
     sitk_image = sitk.GetImageFromArray(np_frame)
     size = sitk_image.GetSize()
-    cropped_image = sitk.Crop(sitk_image, bounding_box[0],
+    tmp_image = sitk.Crop(sitk_image, bounding_box[0],
                 [size[i] - bounding_box[1][i] for i in range(Dimension)])
-
+    del sitk_image
+    
+    cropped_image = sitk.RescaleIntensity(tmp_image)
+    del tmp_image
     # plt.imshow(sitk.GetArrayFromImage(cropped_image), cmap='gray')
     # plt.pause(0.5)
     # plt.show()
@@ -86,5 +89,5 @@ def extractTagFromFrame(np_frame, bounding_box, tag_list):
         final_tag = getTesseractTag(sitk.GetArrayFromImage(final_image), tag_list)
         if final_tag not in fail_tag_list:
             break
-    
+    del thresholded_image, expanded_image, final_image, cropped_image
     return final_tag
