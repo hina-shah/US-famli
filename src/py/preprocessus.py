@@ -23,6 +23,12 @@ def extractUSCineFrame(ds, out_path, out_size):
 
     # Get a mid-cine frame
     middle_frame = int(ds['0028', '00008'].value/2)
+
+    # Maybe cine not of value if only one frame exists, return
+    if middle_frame == 0:
+        logging.warning('Only one frame in the cine, not using it')
+        return None
+
     logging.debug('grabbing middle frame: {}'.format(middle_frame))
     frame = None
     # Depending on the photometric interpretation, grab the first frame and save as jpg

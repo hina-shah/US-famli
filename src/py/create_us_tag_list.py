@@ -13,17 +13,21 @@ import preprocessus
 import extracttagtext
 import time
 
+def getStudyOutputFolder(study, data_folder, out_parent_folder):
+    subject_id = study.name 
+    study_path = study.parent
+    study_path_relative = study_path.relative_to(data_folder)
+    out_dir = out_parent_folder  / study_path_relative / subject_id
+    return out_dir
+
 def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us, tag_bounding_box):
     tag_statistic = dict.fromkeys(tag_list, 0)
     tag_statistic['Unknown'] = 0
     tag_statistic['Undecided'] = 0
     tag_statistic['No tag'] = 0
     
-    subject_id = study.name 
-    study_path = study.parent
-    study_path_relative = study_path.relative_to(data_folder)
-    logging.info("=========== PROCESSING SUBJECT: {} ===============".format(subject_id))
-    out_dir = out_images_dir  / study_path_relative / subject_id
+    logging.info("=========== PROCESSING SUBJECT: {} ===============".format(study.name))
+    out_dir = getStudyOutputFolder(study, data_folder, out_images_dir)
     preprocessus.checkDir(out_dir)
     
     csv_file = open(str(out_dir / 'info.csv'), 'w')
@@ -33,7 +37,7 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
     
     i=1
     file_names = list( study.glob('**/*.dcm') )
-    
+    csvrows=[]
     for file_name in file_names:
 
         start = time.time()
@@ -49,7 +53,7 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
         if np_frame is not None and \
             us_type not in non_tag_us and\
             capture_model in tag_bounding_box.keys():
-
+            # Run tag extraction
             tag = extracttagtext.extractTagFromFrame(np_frame, tag_bounding_box[capture_model], tag_list)
         end = time.time()
         logging.debug('Tag extraction took : {} seconds'.format(end-start))
@@ -58,11 +62,12 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
 
         if len(capture_model)>0 and capture_model not in tag_bounding_box.keys():
             logging.warning('US Model: {} was not found for file: {}'.format(capture_model, file_name))
-
-        csvfilewriter.writerow({'File': str(file_name), 'type': us_type, 'tag': tag})
+        
+        csvrows.append({'File': str(file_name), 'type': us_type, 'tag': tag})
         i+=1
         gc.collect()
-
+    
+    csvfilewriter.writerows(csvrows) 
     csv_file.close()
     return tag_statistic
 
@@ -73,9 +78,10 @@ def main(args):
 
     preprocessus.checkDir(out_images_dir, False)    
     loglevel = logging.DEBUG if args.debug else logging.INFO
-
+    # TODO: Add a datetime into the log file
+    log_file_name = "log" + time.strftime("%Y%m%d-%H%M%S") + ".txt"
     logging.basicConfig(format='%(levelname)s:%(asctime)s:%(message)s', datefmt='%m/%d/%Y %I:%M:%S',
-                         level=loglevel, filename=out_images_dir/'log.txt')
+                         level=loglevel, filename=out_images_dir/log_file_name)
 
     studies = []
     for dirname, dirnames, __ in os.walk(str(data_folder)):
@@ -84,14 +90,7 @@ def main(args):
             
     logging.info('Found {} studies '.format(len(studies)))
     print('Found {} studies '.format(len(studies)))
-    # subjects = ["UNC-0414-1_20190830_111550", 
-    #             "UNC-0414-2_20190924_085140",
-    #             "UNC-0366-3_20190927_093424",
-    #             "UNC-0394-3_20191001_113111",
-    #             "UNC-0418-1_20190904_090711",
-    #             "UNC-0447-1_20190927_114657"]
     
-    rescale_size = [800,600]
     tag_list_file = 'us_tags.txt'
     
     # Approximate bounding box of where the tag is written acoording to the 
@@ -119,12 +118,37 @@ def main(args):
     tag_statistic['Undecided'] = 0
     tag_statistic['No tag'] = 0
 
+    # Also read in study directories that might have been finished by a previous run - do not want to rerun them again
+    finished_study_file = out_images_dir/'finished_studies.txt'
+    finished_studies = None
+    if finished_study_file.exists():
+        with open(finished_study_file) as f:
+            finished_studies = f.read().splitlines()
+            finished_studies = [study for study in finished_studies if study.strip()]
+    if finished_studies is not None:
+        logging.info('Found {} finished studies'.format(len(finished_studies)))
+        cleaned_studies = [study for study in studies if str(study) not in finished_studies]
+        # Get statistics for the finished studies
+        for study in finished_studies:
+            logging.info('Will skip: {}'.format(study))
+            try:
+                infocsv_dir = getStudyOutputFolder(Path(study), data_folder, out_images_dir)
+                with open(infocsv_dir/'info.csv', 'r') as f:
+                    csv_reader = csv.DictReader(f)
+                    for line in csv_reader:
+                        tag_statistic[line['tag']] += 1
+            except:
+                logging.warning('Error reading previously created info.csv for subject: {}'.format(study))
+    else:
+        cleaned_studies = studies
+    del studies
+
     if args.use_threads:
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             # Start the load operations and mark each future with its URL
             future_tags = {executor.submit(extractTagForStudy, study, 
                                             data_folder, out_images_dir, tag_list,
-                                            non_tag_us, tag_bounding_box): study for study in studies}
+                                            non_tag_us, tag_bounding_box): study for study in cleaned_studies}
             for future in concurrent.futures.as_completed(future_tags):
                 d = future_tags[future] 
                 logging.info('Finished processing: {}'.format(d))
@@ -132,15 +156,20 @@ def main(args):
                 logging.info(future.result())
                 for key, value in this_tag_statistic.items():
                     tag_statistic[key] += value
+                with open(finished_study_file, "a+") as f:
+                    f.write(str(d)+os.linesep)
     else:
         i=1
-        for study in studies:
-            this_tag_statistic = extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us, tag_bounding_box)
+        for study in cleaned_studies:
+            this_tag_statistic = extractTagForStudy(study, data_folder, out_images_dir, 
+                                                    tag_list, non_tag_us, tag_bounding_box)
             logging.info('Finished processing: {}'.format(study))
             for key, value in this_tag_statistic.items():
                 tag_statistic[key] += value
             endstr = "\n" if i%50 == 0 else "."
             print("",end=endstr)
+            with open(finished_study_file, "a+") as f:
+                f.write(str(study)+os.linesep)
             i+=1
     
     pprint(tag_statistic)
