@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 import csv
 from argparse import ArgumentParser
-from pprint import pprint
+from pprint import pprint, pformat
 import logging
 import sys
 import gc
@@ -29,11 +29,6 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
     logging.info("=========== PROCESSING SUBJECT: {} ===============".format(study.name))
     out_dir = getStudyOutputFolder(study, data_folder, out_images_dir)
     preprocessus.checkDir(out_dir)
-    
-    csv_file = open(str(out_dir / 'info.csv'), 'w')
-    field_names = ['File', 'type', 'tag']
-    csvfilewriter = csv.DictWriter(csv_file, field_names)
-    csvfilewriter.writeheader()
     
     i=1
     file_names = list( study.glob('**/*.dcm') )
@@ -67,6 +62,11 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
         i+=1
         gc.collect()
     
+    # Write the csv file
+    csv_file = open(str(out_dir / 'info.csv'), 'w')
+    field_names = ['File', 'type', 'tag']
+    csvfilewriter = csv.DictWriter(csv_file, field_names)
+    csvfilewriter.writeheader()
     csvfilewriter.writerows(csvrows) 
     csv_file.close()
     return tag_statistic
@@ -78,7 +78,6 @@ def main(args):
 
     preprocessus.checkDir(out_images_dir, False)    
     loglevel = logging.DEBUG if args.debug else logging.INFO
-    # TODO: Add a datetime into the log file
     log_file_name = "log" + time.strftime("%Y%m%d-%H%M%S") + ".txt"
     logging.basicConfig(format='%(levelname)s:%(asctime)s:%(message)s', datefmt='%m/%d/%Y %I:%M:%S',
                          level=loglevel, filename=out_images_dir/log_file_name)
@@ -133,12 +132,16 @@ def main(args):
             logging.info('Will skip: {}'.format(study))
             try:
                 infocsv_dir = getStudyOutputFolder(Path(study), data_folder, out_images_dir)
+                logging.info('Opening: {}'.format(infocsv_dir))
                 with open(infocsv_dir/'info.csv', 'r') as f:
                     csv_reader = csv.DictReader(f)
                     for line in csv_reader:
                         tag_statistic[line['tag']] += 1
+            except (OSError, ValueError) as err:
+                logging.warning('Error reading previously created info.csv for subject: {}: {}'.format(study, err))
             except:
                 logging.warning('Error reading previously created info.csv for subject: {}'.format(study))
+                logging.warning('Unknown except while reading csvt: {}'.format(sys.exc_info()[0]))
     else:
         cleaned_studies = studies
     del studies
@@ -153,7 +156,7 @@ def main(args):
                 d = future_tags[future] 
                 logging.info('Finished processing: {}'.format(d))
                 this_tag_statistic = future.result()
-                logging.info(future.result())
+                #logging.info(future.result())
                 for key, value in this_tag_statistic.items():
                     tag_statistic[key] += value
                 with open(finished_study_file, "a+") as f:
@@ -173,6 +176,7 @@ def main(args):
             i+=1
     
     pprint(tag_statistic)
+    logging.info(pformat(tag_statistic))
     logging.info('---- DONE ----')
     print('------DONE-----------')
 
