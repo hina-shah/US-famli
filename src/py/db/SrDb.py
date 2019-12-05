@@ -10,32 +10,27 @@ class SrDb(DbBase):
     def __init__(self, path):
         super().__init__(path)
         self._gatagnames = [b'Gestational Age by EDD', b'Gestational Age by LMP']
-        self._reqd_tags = ['tagtitle', 'study_id', 'pid', 'scandate', 'tagcontent', 'numeric']
-
-    def checkNeededVariables(self):
-        if not super().isValid():
-            logging.error('Database not valid, returning')
-            return False
-    
-        varnames_list = self._db.columns.to_list()
-        tags_exist = [l in varnames_list for l in self._reqd_tags]
-        if tags_exist.count(False) > 0:
-            missing_tags = self._reqd_tags[tags_exist == False]
-            logging.error('Database is missing required tags: {}'.format(missing_tags))
-            return False
-        
-        return True
+        self._reqd_tags = ['tagname', 'StudyID', 'pid', 'studydate', 'tagcontent', 'numericvalue']
 
     def getGAForStudyID(self, studyID):
-        if not super().isValid():
+        if not self.isValid():
            logging.error('Database not valid, returning')
            return None, None
 
-        subset = self._db[ ['numeric', 'tagtitle' ]][ (self._db['tagtitle'].isin(self._gatagnames)) & 
-                                      (self._db['study_id'] == bytes(studyID, 'utf-8')) ]
+        subset = self._db[ ['numericvalue', 'tagname' ]][ (self._db['tagname'].isin(self._gatagnames)) & 
+                                      (self._db['StudyID'] == bytes(studyID, 'utf-8')) ]
         if subset.empty:
-            return None, None
+            subset = self._db[ 'numericvalue' ][ (self._db['StudyID'] == bytes(studyID, 'utf-8')) & 
+                                                (self._db['tagname'] == b'Gestational Age') & 
+                                                (self._db['Container'] == b'Summary') & 
+                                                (self._db['Equation'].isnull())]
+            if subset.empty:
+                return None, None
+            else:
+                age = subset.iat[0]
+                gatype = 'Gestational Age by Previous'
         else:
             age = subset.iat[0,0]
             gatype = subset.iat[0,1]
-            return age, gatype
+
+        return age, gatype

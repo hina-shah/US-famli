@@ -91,7 +91,7 @@ def main(args):
 if __name__=="__main__":
     
     parser = ArgumentParser()
-    parser.add_argument('--dir', type=str, help='Directory with subject subfolders.'
+    parser.add_argument('--dir', type=str, help='Directory with subject subfolders that have info.csv generated.'
                 'Every lowest level subfolder will be considered as a study')
     parser.add_argument('--out_dir', type=str, help='Output directory location.'
                 'This will be the directory where the cines have been classified by their tags')

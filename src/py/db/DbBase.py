@@ -9,6 +9,7 @@ class DbBase:
         self._db = None
         self._num_obs = 0
         self._num_vars = 0
+        self._reqd_tags = None
         self.initDB()
 
     def isValid(self):
@@ -38,16 +39,40 @@ class DbBase:
             logging.error('Error reading database from: {}'.format(self._dbfile_path))
             return;
 
+    def checkNeededVariables(self):
+        if not self.isValid():
+            logging.error('Database not valid, returning')
+            return False
+
+        if self._reqd_tags is not None:       
+            varnames_list = self._db.columns.to_list()
+            tags_exist = [l in varnames_list for l in self._reqd_tags]
+            if tags_exist.count(False) > 0:
+                missing_tags = self._reqd_tags[tags_exist == False]
+                logging.error('Database is missing required tags: {}'.format(missing_tags))
+                return False
+        
+        return True
+
     def printTypes(self):
         if self.isValid():
             logging.info(self._db.dtypes)
     
-    def getSubsetAt(self, selVarNames, whereVarName, whereValValue):
+    # Return a subset from the database with selected var names and 
+    # conditions that w
+    def getSubsetAt(self, selVarNames, whereVarNames, whereValValues):
         if not self.isValid():
             logging.error('Database still not set, returning')
             return None
         try:
-            subset = self._db[selVarNames][self._db[whereVarName] == whereValValue]
+            cond_table = None
+            if len(whereValValues) != len(whereVarNames):
+                logging.error('Variable name value pair mismatch')
+                return None
+            for ind in range(len(whereVarNames)):
+                t = self._db[whereVarNames[ind]] == whereValValues[ind]
+                cond_table = t if cond_table is None else cond_table & t
+            subset = self._db[selVarNames][cond_table]
             return subset
         except:
             logging.error('Error reading subset')
@@ -95,4 +120,16 @@ class DbBase:
             return subset
         except:
             logging.error('Error reading First Row')
+            return None
+
+    def getVariables(self, varlist):
+        if not self.isValid():
+            logging.info('Databse still not set, returning')
+            return None
+
+        try:
+            subset = self._db[varlist]
+            return subset
+        except:
+            logging.error('ERror reading the Variables')
             return None
