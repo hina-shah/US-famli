@@ -6,7 +6,7 @@ import time
 import shutil
 import csv
 
-def setupLogFile(dest_dir_path, debug):
+def setupLogFile(dest_dir_path, debug=False):
      #  Setup logging:
     loglevel = logging.DEBUG if debug else logging.INFO
     log_file_name = "log" + time.strftime("%Y%m%d-%H%M%S") + ".txt"

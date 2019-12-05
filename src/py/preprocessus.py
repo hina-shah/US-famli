@@ -12,9 +12,8 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def writeImage(np_image, out_path):
     sim = sitk.GetImageFromArray(np_image)
-    sitk.WriteImage(sim, str(out_path))
+    sitk.WriteImage(sim, str(out_path), False)
     del sim
-
 
 def extractUSCineFrame(ds, out_path, out_size):   
    
