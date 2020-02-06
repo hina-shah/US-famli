@@ -30,6 +30,10 @@ def main(args):
         if ds is None:
             logging.warning('File: {} Missing DICOM metadata'.format(file_str))
 
+        sopclass = ds['0008', '0016'].value
+        if sopclass ~= '1.2.840.10008.5.1.4.1.1.3.1':
+            continue;
+
         # Get numpy arra
         np_image = ds.pixel_array
         photometric_interpretation = ds['0028','0004'].value

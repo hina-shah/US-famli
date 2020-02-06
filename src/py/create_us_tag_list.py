@@ -12,6 +12,7 @@ import concurrent.futures
 import preprocessus
 import extracttagtext
 import time
+import utils
 
 def getStudyOutputFolder(study, data_folder, out_parent_folder):
     subject_id = study.name 
@@ -28,11 +29,12 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
     
     logging.info("=========== PROCESSING SUBJECT: {} ===============".format(study.name))
     out_dir = getStudyOutputFolder(study, data_folder, out_images_dir)
-    preprocessus.checkDir(out_dir)
+    utils.checkDir(out_dir)
     
     i=1
     file_names = list( study.glob('**/*.dcm') )
     csvrows=[]
+    unknown = 0
     for file_name in file_names:
 
         start = time.time()
@@ -41,6 +43,11 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
         np_frame, us_type, capture_model = preprocessus.extractImageArrayFromUS(file_name, out_dir, None)
         end = time.time()
         logging.debug('Preprocessing took : {} seconds'.format(end-start))
+        
+        if len(capture_model)>0 and capture_model not in tag_bounding_box.keys():
+            logging.warning('US Model: {} not supported for file: {}'.format(capture_model, file_name))
+            del np_frame
+            continue
 
         # Extract text from the image
         start = time.time()
@@ -54,21 +61,22 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
         logging.debug('Tag extraction took : {} seconds'.format(end-start))
         tag_statistic[tag] += 1
         del np_frame
-
-        if len(capture_model)>0 and capture_model not in tag_bounding_box.keys():
-            logging.warning('US Model: {} was not found for file: {}'.format(capture_model, file_name))
         
+        if tag == 'Unknown':
+            unknown += 1
+
         csvrows.append({'File': str(file_name), 'type': us_type, 'tag': tag})
         i+=1
         gc.collect()
-    
+
     # Write the csv file
-    csv_file = open(str(out_dir / 'info.csv'), 'w')
-    field_names = ['File', 'type', 'tag']
-    csvfilewriter = csv.DictWriter(csv_file, field_names)
-    csvfilewriter.writeheader()
-    csvfilewriter.writerows(csvrows) 
-    csv_file.close()
+    if len(csvrows) > 0 and (unknown < len(csvrows)):
+        csv_file = open(str(out_dir / 'info.csv'), 'w')
+        field_names = ['File', 'type', 'tag']
+        csvfilewriter = csv.DictWriter(csv_file, field_names)
+        csvfilewriter.writeheader()
+        csvfilewriter.writerows(csvrows) 
+        csv_file.close()
     return tag_statistic
 
 
@@ -76,12 +84,9 @@ def main(args):
     data_folder = Path(args.dir)
     out_images_dir = Path(args.out_dir)
 
-    preprocessus.checkDir(out_images_dir, False)    
-    loglevel = logging.DEBUG if args.debug else logging.INFO
-    log_file_name = "log" + time.strftime("%Y%m%d-%H%M%S") + ".txt"
-    logging.basicConfig(format='%(levelname)s:%(asctime)s:%(message)s', datefmt='%m/%d/%Y %I:%M:%S',
-                         level=loglevel, filename=out_images_dir/log_file_name)
-
+    utils.checkDir(out_images_dir, False)    
+    utils.setupLogFile(out_images_dir, args.debug)
+    
     studies = []
     for dirname, dirnames, __ in os.walk(str(data_folder)):
         if len(dirnames) == 0:
