@@ -62,7 +62,7 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
         tag_statistic[tag] += 1
         del np_frame
         
-        if tag == 'Unknown':
+        if tag in ['Unknown', 'Undecided', 'No tag']:
             unknown += 1
 
         csvrows.append({'File': str(file_name), 'type': us_type, 'tag': tag})

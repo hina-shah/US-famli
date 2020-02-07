@@ -5,85 +5,51 @@ import os
 import csv
 import sys
 import utils
+import shutil
 
 def main(args):
     data_folder = Path(args.dir)
     out_folder = Path(args.out_dir)
-    #checkDir(out_folder)
 
     #  Setup logging:
-    loglevel = logging.DEBUG if args.debug else logging.INFO
-    log_file_name = "log" + time.strftime("%Y%m%d-%H%M%S") + ".txt"
-    logging.basicConfig(format='%(levelname)s:%(asctime)s:%(message)s', datefmt='%m/%d/%Y %I:%M:%S',
-                         level=loglevel, filename=out_folder/log_file_name)
-    tags=[]
-    try:
-        tags = args.tags.split(' ')
-        logging.info('Looking for tags: {}'.format(tags))
-        for tag in tags:
-            checkDir(out_folder/tag, False)
-    except:
-        logging.error("Couldn't split the tags string")
-        return
-
-    bounding_box = [[0,0], [255,190]]
+    utils.setupLogFile(out_dir, args.debug)
+    
+    none_tags = ['Unknown', 'Undecided', 'No tag']
+    
     # Find all the info.csv files:
     tag_file_names = list( data_folder.glob('**/info.csv') )
     for tag_file in tag_file_names:
         logging.info('--- PROCESSING: {}'.format(tag_file))
-        files_to_copy = []
+        # Read the tags
+        tags = []
+        this_none_tags = []
         try:
             with open(tag_file) as f:
                 csv_reader = csv.DictReader(f)
-                file_tag_pairs = [ (line['File'], line['tag']) for line in csv_reader if line['tag'] in tags ]
+                file_tag_pairs = [ (line['File'], line['type'], line['tag']) for line in csv_reader]
+                tags = [ line['tag'] for line in csv_reader ]
+                this_none_tags = [pair[2] for pair in tags if pair[2] in none_tags]
         except (OSError) as e:
             logging.error('Error reading csv file: {}'.format(tag_file))
-            return
+            continue
+        
+        if len(tags) > 0 and len(tags) == len(this_none_tags):
+        # If all are unknown, then delete the info.csv file, we will come back to it at a later 
+        # stage
+            shutil.remove(tag_file)
+        else:
+            # change the mount destination in file names
+            csvrows = []
+            for pair in tags:
+                pair['File'] = (pair['File']).replace('/mnt', args.out_dir)
+                csvrows.append({'File':pair['File'], 'type':pair['type'], 'tag':pair['tag']})
+            csv_file = open(str(out_dir / 'info.csv'), 'w')
+            field_names = ['File', 'type', 'tag']
+            csvfilewriter = csv.DictWriter(csv_file, field_names)
+            csvfilewriter.writeheader()
+            csvfilewriter.writerows(csvrows) 
+            csv_file.close()
 
-        for file, tag in file_tag_pairs:
-            file_name = Path(file).name
-            stem = Path(file_name).stem
-
-            jpg_file_name = tag_file.parent/(stem+'.jpg')
-            cropped = None
-            if jpg_file_name.exists():
-                simage = sitk.ReadImage(str(jpg_file_name))
-                if args.crop_images:        
-                    size = simage.GetSize()
-                    cropped = sitk.Crop(simage, bounding_box[0],
-                                [size[i] - bounding_box[1][i] for i in range(2)])
-                else:
-                    cropped = simage
-
-            tag_folder = out_folder/tag
-            target_simlink_name = tag_folder/file_name
-            out_jpg_name = tag_folder/(stem+'.jpg')
-            if os.path.exists(target_simlink_name):
-                # count all files with that link
-                logging.info('<---Found duplicates! ----> ')
-                ext = Path(file_name).suffix
-                all_target_simlink_files = list( Path(tag_folder).glob(stem+'*'+ext) )
-                new_name = stem+'_'+str(len(all_target_simlink_files))+ext
-                target_simlink_name = tag_folder/new_name
-                new_name = stem+'_'+str(len(all_target_simlink_files))+'.jpg'
-                out_jpg_name = tag_folder/(new_name+'.jpg')
-            logging.info('Copying file: {} -> {}'.format(file, target_simlink_name))
-            
-            try:
-                # TODO: WARNING: the replacement hardcoding should be eventually by creating a more consistent
-                # way of saving the images in the first place
-                if file.find('/mnt/') >= 0:
-                    som_dir = args.som_home_dir + '/' if args.som_home_dir[-1] != '/' else args.som_home_dir
-                    file = file.replace('/mnt/', args.som_home_dir)
-                shutil.copyfile(file, target_simlink_name)
-            except FileNotFoundError:
-                logging.warning("Couldn't find file: {}".format(file))
-            except PermissionError:
-                logging.warning("Didn't have enough permissions to copy to target: {}".format(target_simlink_name))
-
-            if cropped is not None:
-                logging.info('Writing jpg image: {}'.format(out_jpg_name))
-                sitk.WriteImage(cropped, str(out_jpg_name))
     logging.info('----- DONE -----')
 
 if __name__=="__main__":
@@ -91,11 +57,9 @@ if __name__=="__main__":
     parser = ArgumentParser()
     parser.add_argument('--dir', type=str, help='Directory with subject subfolders containing info.csv tagfiles.'
                 'Every lowest level subfolder will be considered as a study')
-    parser.add_argument('--out_dir', type=str, help='Output directory location.')
-    parser.add_argument('--debug', action='store_true', help='Add debug info in log')
-    parser.add_argument('--tags', type=str, help='Space delimited list of tag files to be copied')
-    parser.add_argument('--crop_images', action='store_true', help='Crop images while copying them over')
+    parser.add_argument('--out_dir', type=str, help='Output directory location for logging.')
     parser.add_argument('--som_home_dir', type=str, help='SOM server directory, needed to replace a mount position in the file names')
+    parser.add_argument('--debug', action='store_true', help='Add debug info in log')
     args = parser.parse_args()
 
     main(args)
