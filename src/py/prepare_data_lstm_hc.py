@@ -117,14 +117,33 @@ def main(args):
                     'L15', 'L45', 'L0', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
     tag_2d = ['HC']
 
-    info_csv_list = list( data_folder.glob('**/info_corrected.csv') )
+    info_csv_list = []
+    out_suffix = ''
+    if args.include_dirs_list is not None:
+        out_suffix = '_' + Path(args.include_dirs_list).stem
+        include_dirs = []
+        try:
+            with open(args.include_dirs_list) as f:
+                lines = f.readlines()
+                include_dirs = [x.strip() for x in lines]
+        except Exception as e:
+            logging.error('Error while opening the include dir list: {}'.format(e))
+            return
+        all_csvs = list( data_folder.glob('**/info_corrected.csv') )
+        for sub_dir in include_dirs:
+            sub_dir_list = [csv_file for csv_file in all_csvs if csv_file.match('**/' + sub_dir + '/*/*.csv')]
+            info_csv_list.extend(sub_dir_list)
+    else:
+        info_csv_list = list( data_folder.glob('**/info_corrected.csv') )
+
     logging.info('Found {} studies with an info_corrected.csv '.format(len(info_csv_list)))
-    print('Found {} studies with an info_corrected.csv '.format(len(info_csv_list)))
+    print('Found {} studies with an info_corrected.csv '.format(len(info_csv_list)))            
+
     img_count_db = {}
     bs_db = {}
     counter = 0
-    for tag_file in info_csv_list:
-        print('-- Found: {} --- studies'.format(counter))
+    for i, tag_file in enumerate(info_csv_list):
+        print('Processing file {}/{}, found {} studies with BS and HC'.format(i, len(info_csv_list), counter))
         logging.info('--- PROCESSING: {}'.format(tag_file))
         try:
             with open(tag_file) as f:
@@ -150,6 +169,12 @@ def main(args):
                     out_study_dir = getStudyOutputFolder(tag_file.parent, data_folder, out_images_dir)
                     utils.checkDir(out_study_dir, False)
                     logging.debug('Output folder is: {}'.format(out_study_dir))
+
+                    # Continue if the processing has already been done on this folder:
+                    if (out_study_dir/'head_2d_image.dcm').exists():
+                        logging.info('Output study: {} already processed, SKIPPING'.format(out_study_dir))
+                        continue
+
                     hc_img_path = Path(args.som_working_dir + '/' + im_list[0]['File'])
                     # Iterate through the blindsweeps list
                     num_imgs_found = 0
@@ -180,7 +205,7 @@ def main(args):
     # Write the list of HC and blindsweep images
     try:
         j_f = json.dumps(bs_db, indent=4)
-        f = open(str(out_images_dir/'hc_and_blindsweeps.json'),"w")
+        f = open(str(out_images_dir/ ('hc_and_blindsweeps' + out_suffix + '.json')),"w")
         f.write(j_f)
         f.close()
     except Exception as e:
@@ -191,7 +216,7 @@ def main(args):
     # Write out the number of images identified in each study:
     try:
         j_f = json.dumps(img_count_db, indent=4)
-        with open(str(out_images_dir/'study_images_count.json'),"w") as f:
+        with open(str(out_images_dir/ ('study_images_count' + out_suffix + '.json')),"w") as f:
             f.write(j_f)
     except Exception as e:
         print(e)
@@ -212,6 +237,7 @@ if __name__=="__main__":
                                 'Basically parent location for the famli folder, and original ultrasound images are stored here', required=True)
     parser.add_argument('--path_to_classification', type=str, help='Path to the classification code : us-famli-nn/bin/index.js')
     parser.add_argument('--use_threads', action='store_true', help='Use threads to run the code')
+    parser.add_argument('--include_dirs_list', default=None, help='A text file with the directories to process in this run')
     args = parser.parse_args()
 
     main(args)
