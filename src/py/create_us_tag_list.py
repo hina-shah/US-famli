@@ -114,8 +114,8 @@ def main(args):
             tag_list = f.read().splitlines()
     except:
         logging.warning('ERROR READING THE TAG FILE')
-        tag_list = ['M', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R15', 'R45', 
-                    'L15', 'L45', 'L0', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
+        tags = ['M', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R15', 'R45', 'R0', 'RO', 'R1',
+                    'L15', 'L45', 'L0', 'LO', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
 
     tag_statistic = dict.fromkeys(tag_list, 0)
     tag_statistic['Unknown'] = 0

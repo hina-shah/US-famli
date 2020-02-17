@@ -33,7 +33,12 @@ def runClassificationOnFolder(data_folder, path_to_classification, out_folder,
         logging.error('Source code for classification does not exist at: {}'.format(node_source_path))
         return 0
     
-    output_file = str(out_folder / ('prediction_' + data_folder.stem + '.csv'))
+    output_file_path = out_folder / ('prediction_' + data_folder.stem + '.csv') 
+    output_file = str(output_file_path)
+    if output_file_path.exists():
+        logging.debug('Prediction file: {} exists, skipping the corresponding folder'.format(output_file_path))
+        return 0
+
     command_list = ['node', node_source_path, '--dir', str(data_folder), '--type', 'remove_calipers', '--type', 'classify_ga', '--out', output_file]
     try:
         subprocess.run(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
@@ -105,6 +110,16 @@ def getStudyOutputFolder(study, data_folder, out_parent_folder):
     out_dir = out_parent_folder  / study_path_relative / subject_id
     return out_dir
 
+def isStudyCompletelyProcessed(out_study_dir, bs_list):
+    study_processed = True
+    study_processed = study_processed & (out_study_dir/'head_2d_image.dcm').exists()
+    for bs_file in bs_list:
+        cine_name = Path(bs_file['File']).stem
+        prediction_file = out_study_dir/ ('prediction_' + cine_name + '.csv')
+        study_processed = study_processed & prediction_file.exists()
+
+    return study_processed
+
 def main(args):
     data_folder = Path(args.dir)
     out_images_dir = Path(args.out_dir)
@@ -113,8 +128,8 @@ def main(args):
     utils.setupLogFile(out_images_dir, args.debug)
 
     # read the list of acceptable tags in the ultrasound file
-    tags = ['M', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R15', 'R45',
-                    'L15', 'L45', 'L0', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
+    tags = ['M', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R15', 'R45', 'R0', 'RO', 'R1',
+                    'L15', 'L45', 'L0', 'LO', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
     tag_2d = ['HC']
 
     info_csv_list = []
@@ -171,7 +186,7 @@ def main(args):
                     logging.debug('Output folder is: {}'.format(out_study_dir))
 
                     # Continue if the processing has already been done on this folder:
-                    if (out_study_dir/'head_2d_image.dcm').exists():
+                    if isStudyCompletelyProcessed(out_study_dir, bs_list):
                         logging.info('Output study: {} already processed, SKIPPING'.format(out_study_dir))
                         continue
 
