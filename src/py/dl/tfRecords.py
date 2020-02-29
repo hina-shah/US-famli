@@ -12,6 +12,7 @@ import uuid
 from collections import namedtuple
 import nrrd3D_2D
 import tfRecords_split
+from pathlib import Path
 
 def _int64_feature(value):
 	if not isinstance(value, list):
@@ -27,6 +28,20 @@ def _bytes_feature(value):
 	if not isinstance(value, list):
 		value = [value]
 	return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
+
+def read_image(path, imageDimension):
+	if(imageDimension == -1):
+		img_read = itk.ImageFileReader.New(FileName=path)
+		img_read.Update()
+		img = img_read.GetOutput()
+	else:
+		ImageType = itk.VectorImage[itk.F, args.imageDimension]
+
+		img_read = itk.ImageFileReader[ImageType].New(FileName=path)
+		img_read.Update()
+		img = img_read.GetOutput()
+	number_of_components = img.GetNumberOfComponentsPerPixel()
+	return img, number_of_components
 
 def main(args):
 	
@@ -142,24 +157,37 @@ def main(args):
 				##If the path exists then it will try to read it as an image
 				if(os.path.exists(fobj[key])):
 					print("Reading:", fobj[key])
-					if(args.imageDimension == -1):
-						img_read = itk.ImageFileReader.New(FileName=fobj[key])
-						img_read.Update()
-						img = img_read.GetOutput()
-					else:
-						ImageType = itk.VectorImage[itk.F, args.imageDimension]
+					if(os.path.isdir(fobj[key])):
+						# If this is a directory, it will read in all nrrd files,
+						# and join together all of them into a single large nrrd file chunk
 
-						img_read = itk.ImageFileReader[ImageType].New(FileName=fobj[key])
-						img_read.Update()
-						img = img_read.GetOutput()
+						# NOTE: assumption is that all of them have the same dimensions
+						# NOTE: a length field will also be added to the feature dictionary
+						# NOTE: assuming that all images also have the same pixel components
+
+						imglist = list(Path(fobj[key]).glob('*.nrrd'))
+						print('Number of images in directory: ',len(imglist))
+						if len(imglist) == 0:
+							print('No images found in this directory, skipping')
+							continue
+						img_np = None
+						for img_path in imglist:
+							sub_im, number_of_components  = read_image(str(img_path), args.imageDimension)
+							sub_im_np = itk.GetArrayViewFromImage(sub_im).astype(float)
+							img_np = sub_im_np if img_np is None else np.concatenate([img_np, sub_im_np])
+						print('Got all the images into one: ', img_np.shape)
+						feature['num_images'] = _int64_feature(len(imglist))
+
+					else:
+						img, number_of_components = read_image(fobj[key], args.imageDimension)
+						img_np = itk.GetArrayViewFromImage(img).astype(float)
 					
-					img_np = itk.GetArrayViewFromImage(img).astype(float)
 					if(args.resize):
 						obj["resize"] = args.resize
 						
 						resize_shape = list(args.resize)
-						if(img.GetNumberOfComponentsPerPixel() > 1):
-							resize_shape += [img.GetNumberOfComponentsPerPixel()]
+						if(number_of_components > 1):
+							resize_shape += [number_of_components]
 						img_np_x =  np.zeros(resize_shape)
 
 						img_np_assign_shape = []
@@ -183,9 +211,9 @@ def main(args):
 						assign_img = "img_np_x[" + ",".join(img_np_assign_shape) + "] = img_np"
 						exec(assign_img)
 						img_np = img_np_x
-
+					
 					feature[key] =  _float_feature(img_np.reshape(-1).tolist())
-
+					
 					# Put the shape of the image in the json object if it does not exists. This is done for global information
 					img_shape = list(img_np.shape)
 					if(img_shape[0] == 1):
@@ -194,16 +222,23 @@ def main(args):
 
 					# This is the number of channels, if the number of components is 1, it is not included in the image shape
 					# If it has more than one component, it is included in the shape, that's why we have to add the 1
-					if(img.GetNumberOfComponentsPerPixel() == 1):
+					if(number_of_components == 1):
 						img_shape = img_shape + [1]
 
-					if(not "shape" in obj[key]):
-						print("Shape", key, img_shape)
-						obj[key]["shape"] = img_shape
+					if args.lstmMode and os.path.isdir(fobj[key]):
+						if(not "shape" in obj[key]):
+							obj[key]["shape"] = img_shape
+						else:
+							obj[key]["shape"] = (np.maximum(img_shape, obj[key]["shape"])).tolist()
 					else:
-						if not np.all(np.equal(obj[key]["shape"] , img_shape)):
-							print(fobj[key], file=sys.stderr)
-							raise "The images in your training set do not have the same dimensions!"
+						if(not "shape" in obj[key]):
+							print("Shape", key, img_shape)
+							obj[key]["shape"] = img_shape
+						else:
+							if not np.all(np.equal(obj[key]["shape"] , img_shape)):
+								print(fobj[key], file=sys.stderr)
+								print("The images in your training set do not have the same dimensions!")
+								raise "The images in your training set do not have the same dimensions!"
 
 					if(not "max" in obj[key]):
 						obj[key]["max"] = np.max(img_np)
@@ -242,7 +277,7 @@ def main(args):
 
 						if(not "type" in obj[key]):
 							obj[key]["type"] = "tf.float32"
-					except:
+					except Exception as e:
 						# If it fails the try saving it as a bytes feature
 						# encode the string
 						feature[key] = _bytes_feature(obj[key].encode())
@@ -315,7 +350,7 @@ if __name__ == "__main__":
 	parser.add_argument('--out', type=str, default="./out", help="Output directory")
 	parser.add_argument('--split', type=float, default=0, help="Split the data for evaluation. [0-1], 0=no split")
 	parser.add_argument('--imageDimension', type=int, default=-1, help="Set image dimension, by default it will try to guess it but you can set this here. Or use it when a type is not wrapped. Ex. RGB double, it will read the image as a float vector image")
-
+	parser.add_argument('--lstmMode', type=bool, default=False, help="LSTM mode ignores the requirement that all feature should have the same size")
 	args = parser.parse_args()
 
 	main(args)
