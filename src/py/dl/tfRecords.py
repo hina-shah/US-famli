@@ -4,6 +4,7 @@ import os
 import glob
 import numpy as np
 import tensorflow as tf
+import random
 #import matplotlib.pyplot as plt
 import sys
 import json
@@ -150,7 +151,6 @@ def main(args):
 		try:
 
 			for key in row_keys:
-
 				if(not key in obj):
 					obj[key] = {}
 
@@ -164,20 +164,33 @@ def main(args):
 						# NOTE: assumption is that all of them have the same dimensions
 						# NOTE: a length field will also be added to the feature dictionary
 						# NOTE: assuming that all images also have the same pixel components
-
 						imglist = list(Path(fobj[key]).glob('*.nrrd'))
-						print('Number of images in directory: ',len(imglist))
+						random.shuffle(imglist)
 						if len(imglist) == 0:
 							print('No images found in this directory, skipping')
 							continue
 						img_np = None
+						sub_im, number_of_components  = read_image(str(imglist[0]), args.imageDimension)
+						# Will select/create number of images based on width of the image
+						width = sub_im.GetLargestPossibleRegion().GetSize()[0]
+						height = sub_im.GetLargestPossibleRegion().GetSize()[1]
+						if len(imglist) > args.sequence_length:
+							print('Randomly chosing {} images'.format(args.sequence_length))
+							imglist = imglist[:args.sequence_length]
+						print('Number of images in directory: ',len(imglist))
+						
 						for img_path in imglist:
 							sub_im, number_of_components  = read_image(str(img_path), args.imageDimension)
 							sub_im_np = itk.GetArrayViewFromImage(sub_im).astype(float)
 							img_np = sub_im_np if img_np is None else np.concatenate([img_np, sub_im_np])
-						print('Got all the images into one: ', img_np.shape)
-						feature['num_images'] = _int64_feature(len(imglist))
-
+						
+						if len(imglist) < args.sequence_length:
+							print('Insufficient number of images, padding with zeros:')
+							diff = args.sequence_length - len(imglist)
+							sub_im_np = np.zeros([diff*height, width] )
+							img_np = np.concatenate([img_np, sub_im_np])
+						
+						print('Shape of the concatenated image: {}'.format(img_np.shape))
 					else:
 						img, number_of_components = read_image(fobj[key], args.imageDimension)
 						img_np = itk.GetArrayViewFromImage(img).astype(float)
@@ -213,9 +226,12 @@ def main(args):
 						img_np = img_np_x
 					
 					feature[key] =  _float_feature(img_np.reshape(-1).tolist())
-					
+
 					# Put the shape of the image in the json object if it does not exists. This is done for global information
-					img_shape = list(img_np.shape)
+					if args.lstmMode and os.path.isdir(fobj[key]):
+						img_shape = [args.sequence_length, width, height]
+					else:
+						img_shape = list(img_np.shape)
 					if(img_shape[0] == 1):
 						# If the first component is 1 we remove it. It means that is a 2D image but was saved as 3D
 						img_shape = img_shape[1:]
@@ -225,20 +241,19 @@ def main(args):
 					if(number_of_components == 1):
 						img_shape = img_shape + [1]
 
-					if args.lstmMode and os.path.isdir(fobj[key]):
-						if(not "shape" in obj[key]):
-							obj[key]["shape"] = img_shape
-						else:
-							obj[key]["shape"] = (np.maximum(img_shape, obj[key]["shape"])).tolist()
+					# This boolean will mark that this key is from a directory
+					# And also add num_images into the data keys
+					if args.lstmMode and os.path.isdir(fobj[key]) and not "dirFeature" in obj[key]:
+						obj[key]["dirFeature"] = True
+
+					if(not "shape" in obj[key]):
+						print("Shape", key, img_shape)
+						obj[key]["shape"] = img_shape
 					else:
-						if(not "shape" in obj[key]):
-							print("Shape", key, img_shape)
-							obj[key]["shape"] = img_shape
-						else:
-							if not np.all(np.equal(obj[key]["shape"] , img_shape)):
-								print(fobj[key], file=sys.stderr)
-								print("The images in your training set do not have the same dimensions!")
-								raise "The images in your training set do not have the same dimensions!"
+						if not np.all(np.equal(obj[key]["shape"] , img_shape)):
+							print(fobj[key], file=sys.stderr)
+							print("The images in your training set do not have the same dimensions!")
+							raise "The images in your training set do not have the same dimensions!"
 
 					if(not "max" in obj[key]):
 						obj[key]["max"] = np.max(img_np)
@@ -304,9 +319,10 @@ def main(args):
 			writer.close()
 
 		except Exception as e:
-			print("Error converting to tfRecord", obj, e, file=sys.stderr)
+			print("Error converting to tfRecord: \n ", obj, e, file=sys.stderr)
+			print("\n")
 			print("I'll keep on going...")
-
+	
 	obj['tfrecords'] = os.path.basename(args.out.rstrip(os.sep))
 	
 	outjson = args.out.rstrip(os.sep) + ".json"
@@ -351,6 +367,7 @@ if __name__ == "__main__":
 	parser.add_argument('--split', type=float, default=0, help="Split the data for evaluation. [0-1], 0=no split")
 	parser.add_argument('--imageDimension', type=int, default=-1, help="Set image dimension, by default it will try to guess it but you can set this here. Or use it when a type is not wrapped. Ex. RGB double, it will read the image as a float vector image")
 	parser.add_argument('--lstmMode', type=bool, default=False, help="LSTM mode ignores the requirement that all feature should have the same size")
+	parser.add_argument('--sequence_length', type=int, default=-1, help="Specifies number of frames in each video for lstm mode. This is required when LSTM mode is used.")
 	args = parser.parse_args()
 
 	main(args)
