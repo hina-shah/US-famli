@@ -69,7 +69,6 @@ def runClassificationOnFolder(data_folder, path_to_classification, out_folder,
             ref_spacing = ref_img.GetSpacing()[:2]
             ref_direction = ref_img.GetDirection()
             target_direction = [ref_direction[0], ref_direction[1], ref_direction[3], ref_direction[4]]
-            target_size = ref_img.GetSize()[:2]
 
         for image_path_str in class_images:
             image_path = Path(image_path_str)
@@ -77,7 +76,10 @@ def runClassificationOnFolder(data_folder, path_to_classification, out_folder,
             if sitk_reference_image_path is not None:            
                 src_image = sitk.ReadImage(image_path_str)
                 if src_image.GetDimension() == 3:
-                    logging.warning('GOT a 2d image with dimension 3 {}'.format(src_img.GetSize()))
+                    logging.warning('GOT a 2d image with dimension 3 {}'.format(src_image.GetSize()))
+
+                target_size = [  sz*ss/rs for sz, ss, rs in zip( src_image.GetSize()[:2], src_image.GetSpacing()[:2], ref_img.GetSize()[:2]) ]
+                print(target_size)
 
                 sitk_resample = sitk.ResampleImageFilter()
                 sitk_resample.SetOutputSpacing(ref_spacing)

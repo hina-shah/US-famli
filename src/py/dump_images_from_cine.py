@@ -7,9 +7,10 @@ import pydicom
 import numpy as np
 import SimpleITK as sitk
 
-def dumpImagesForCine(cine_file_path, out_dir, store_jpg = False):
+def dumpImagesForCine(cine_file_path, out_dir, store_jpg = False, frame_list = None):
     if not cine_file_path.exists():
         logging.warning('PATH: {} does not exist'.format(str(cine_file_path)))
+        return
 
     file_str = str(cine_file_path)
     # read the metadata header
@@ -39,7 +40,10 @@ def dumpImagesForCine(cine_file_path, out_dir, store_jpg = False):
     out_path = out_dir/cine_file_path.stem
     utils.checkDir(out_path, False)
 
-    for i in range(num_frames):
+    if frame_list is None:
+        frame_list = range(num_frames)
+
+    for i in frame_list:
         if(store_jpg):
             file_out = str(out_path) + '/frame_' + str(i) + '.jpg'
             preprocessus.writeImage(np_image[i, :, :], file_out )
@@ -48,7 +52,7 @@ def dumpImagesForCine(cine_file_path, out_dir, store_jpg = False):
         sim.SetSpacing(ds.PixelSpacing)
         sitk.WriteImage(sim, file_out)
         del sim
-    
+
     del ds
     del np_image
     return out_path
