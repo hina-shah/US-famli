@@ -117,7 +117,7 @@ def isStudyCompletelyProcessed(out_study_dir, bs_list):
     for bs_file in bs_list:
         cine_name = Path(bs_file['File']).stem
         prediction_file = out_study_dir/ ('prediction_' + cine_name + '.csv')
-        study_processed = study_processed & prediction_file.exists()
+        study_processed = study_processed & prediction_file.exists() & os.stat(str(prediction_file)).st_size > 100
 
     return study_processed
 
