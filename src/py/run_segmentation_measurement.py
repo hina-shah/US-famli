@@ -21,24 +21,30 @@ def runSegmentationOnFolder(data_folder, path_to_classification='/HOMER_STOR/hin
     class_type_map['FL'] = ['US-famli_predict_fl-mask', 'fl-mask-predict.sh']
 
     if class_name in class_type_map:
-        node_source_path = path_to_classification + '/us-famli-nn/bin/index.js'
-        utils.checkDir(output_folder_path, False)
-        command_list = ['node', node_source_path, '--dir', str(data_folder), '--type', 'remove_calipers', '--type', class_type_map[class_name][0], '--out', str(output_folder_path)]
-        try:
-            subprocess.run(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
-        except Exception as e:
-            logging.error(e)
-            logging.info('Error processing image dump folder: {}'.format(data_folder))
-            return 0
         
-        cmd_path = str(Path(path_to_fit_sh) / class_type_map[class_name][1])
-        command_list = [cmd_path, '-i', str(output_folder_path), '-o', str(output_fit_folder_path)]
-        try:
-            subprocess.run(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
-        except Exception as e:
-            logging.error(e)
-            logging.info('Error processing Segmentation folder: {}'.format(output_folder_path))
-            return 0
+        if not output_folder_path.exists():
+            logging.info('Running Segmentation for: {}'.format(data_folder))
+            node_source_path = path_to_classification + '/us-famli-nn/bin/index.js'
+            utils.checkDir(output_folder_path, False)
+            command_list = ['node', node_source_path, '--dir', str(data_folder), '--type', 'remove_calipers', '--type', class_type_map[class_name][0], '--out', str(output_folder_path)]
+            try:
+                subprocess.run(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
+            except Exception as e:
+                logging.error(e)
+                logging.info('Error processing image dump folder: {}'.format(data_folder))
+                return 0
+        
+        if not output_fit_folder_path.exists():
+            logging.info('Running Fitting for: {}'.format(data_folder))
+            utils.checkDir(output_fit_folder_path, False)
+            cmd_path = str(Path(path_to_fit_sh) / class_type_map[class_name][1])
+            command_list = [cmd_path, '-i', str(output_folder_path), '-o', str(output_fit_folder_path)]
+            try:
+                subprocess.run(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
+            except Exception as e:
+                logging.error(e)
+                logging.info('Error processing Segmentation folder: {}'.format(output_folder_path))
+                return 0
 
 def main(args):
     data_folder = Path(args.dir)
@@ -133,7 +139,7 @@ def main(args):
     # Run segmentation and size estimation on each study
     print('****** ONTO SEGMENTATION AND FITTING *****')
     for i, study in enumerate(class_db):
-        print('Segmentation/Fitting Processing file {}/{}'.format(i, len(class_db.keys())))
+        print('Segmentation/Fitting Processing study {}/{}, Name: {}'.format(i, len(class_db.keys()), study))
         logging.info('--- Segmentation/Fitting PROCESSING: {}'.format(study))
         class_keys = [key for key in class_db[study] if 'images' in class_db[study][key]]
         
