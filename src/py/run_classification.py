@@ -31,8 +31,8 @@ def runClassificationOnFolder(data_folder, path_to_classification, out_folder):
     
     output_file_path = out_folder / ('prediction_' + data_folder.stem + '.csv') 
     output_file = str(output_file_path)
-    if output_file_path.exists():
-        logging.debug('Prediction file: {} exists, skipping the corresponding folder'.format(output_file_path))
+    if output_file_path.exists() and os.stat(str(output_file)).st_size > 100:
+        logging.info('Prediction file: {} exists, skipping the corresponding folder'.format(output_file_path))
         return 0
 
     command_list = ['node', node_source_path, '--dir', str(data_folder), '--type', 'remove_calipers', '--type', 'classify_ga', '--out', output_file]
@@ -65,6 +65,7 @@ def getStudyOutputFolder(study, data_folder, out_parent_folder):
 
 def isStudyCompletelyProcessed(out_study_dir, bs_list):
     study_processed = True
+    study_processed = study_processed & (out_study_dir/'ImgDump').exists()
     for bs_file in bs_list:
         cine_name = Path(bs_file['File']).stem
         prediction_file = out_study_dir/ ('prediction_' + cine_name + '.csv')
@@ -129,7 +130,7 @@ def main(args):
                     # Create the study directory in the output folder
                     out_study_dir = getStudyOutputFolder(tag_file.parent, data_folder, out_images_dir)
                     utils.checkDir(out_study_dir, False)
-                    logging.debug('Output folder is: {}'.format(out_study_dir))
+                    logging.info('Output folder is: {}'.format(out_study_dir))
 
                     # Continue if the processing has already been done on this folder:
                     if isStudyCompletelyProcessed(out_study_dir, bs_list):
@@ -142,11 +143,13 @@ def main(args):
                         # Dump images of the blindsweep -> in the form of nrrd's (not jpgs)
                         img_dump_dir = out_study_dir/'ImgDump'
                         utils.checkDir(img_dump_dir, False)
-                        logging.debug('Dumping images for cine: {}'.format(bs_item['File']))
+                        logging.info('Dumping images for cine: {}'.format(bs_item['File']))
                         cine_dump_path = dumpImagesForCine( Path( args.som_working_dir + '/' + bs_item['File']), img_dump_dir)
-                        # Run classification on the imgdump folder
-                        logging.debug('Run classification for cine: {}'.format(bs_item['File']))
-                        runClassificationOnFolder(Path(cine_dump_path), args.path_to_classification, Path(out_study_dir))
+                        
+                        if args.run_classification:
+                            # Run classification on the imgdump folder
+                            logging.info('Run classification for cine: {}'.format(bs_item['File']))
+                            runClassificationOnFolder(Path(cine_dump_path), args.path_to_classification, Path(out_study_dir))
 
         except (OSError) as e:
             logging.error('Error reading csv file: {}'.format(tag_file))
@@ -186,6 +189,7 @@ if __name__=="__main__":
     parser.add_argument('--som_working_dir', type=str, help = 'Mount location for the SOM server.' 
                                 'Basically parent location for the famli folder, and original ultrasound images are stored here', required=True)
     parser.add_argument('--path_to_classification', type=str, help='Path to the classification code : us-famli-nn/bin/index.js')
+    parser.add_argument('--run_classification', default=True, type=bool, help='Run classification code as well')
     parser.add_argument('--include_dirs_list', default=None, help='A text file with the directories to process in this run')
     args = parser.parse_args()
 
