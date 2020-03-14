@@ -54,6 +54,9 @@ def getMaxMeasurement(json_list, anatomy_name):
             except KeyError as e:
                 print('Error processing the contents of json file {}'.format(json_file))
                 continue
+            except Exception as e:
+                print("Other error occured: {}".format(e))
+                continue
 
             if measurement > max_measurement:
                 max_measurement = measurement

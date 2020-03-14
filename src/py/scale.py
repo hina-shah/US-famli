@@ -10,6 +10,9 @@ def circumference_ellipse(radius):
 		return 0
 	a = radius[0]
 	b = radius[1]
+	if a < 0 or b < 0:
+		print('Values to circumference_ellipse must be greater than 0', file=sys.stderr)
+		return 0
 
 	return math.pi * ( 3*(a + b) - math.sqrt( (3*a + b) * (a + 3*b) ) )
 
@@ -17,7 +20,11 @@ def circumference_circle(radius):
 	if(len(radius) < 1):
 		print("Radius must be an array one values", file=sys.stderr)
 		return 0
+
 	a = radius[0]
+	if a < 0:
+		print('in Circle circumference, radius must be greathre than 0', file = sys.stderr)
+		return 0
 
 	return 2 * math.pi * a 
 
