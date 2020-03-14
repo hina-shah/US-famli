@@ -9,6 +9,8 @@ import SimpleITK as sitk
 import csv
 
 def getImScale(maxmeas, maxmeasfile, unit_adjust_scale = 0.1):
+    if maxmeasfile is None:
+        return -1
     # NOTE: Assuming that image spacing is in mm, so converting it cms
     maxmeasimg = str(maxmeasfile).replace('json', 'nrrd')
     img = sitk.ReadImage(maxmeasimg)
@@ -17,7 +19,7 @@ def getImScale(maxmeas, maxmeasfile, unit_adjust_scale = 0.1):
         scaledmeas = maxmeas * spacing[0] * unit_adjust_scale
     else:
         print('WARNING: Rectangular pixels not handled yet, using max spacing')
-        scaledmeas = maxmeas * max(spacing[0], spacing[1])
+        scaledmeas = maxmeas * max(spacing[0], spacing[1]) * unit_adjust_scale
     return scaledmeas
 
 def getMaxMeasurement(json_list, anatomy_name):
@@ -88,7 +90,10 @@ def main(args):
         # scale the maxmes based on image's scale
         scaled_maxmeas = getImScale(maxmeas, maxmeasfile)
         study_db[study_name]['max_measure'][this_anatomy] = scaled_maxmeas
-        study_db[study_name]['max_measure_img'][this_anatomy] = Path(maxmeasfile.name).stem
+        if maxmeasfile is not None:
+            study_db[study_name]['max_measure_img'][this_anatomy] = Path(maxmeasfile.name).stem
+        else:
+            study_db[study_name]['max_measure_img'][this_anatomy] = ''
 
         # Also process for BPD measurements
         if this_anatomy == 'HC':
@@ -97,7 +102,10 @@ def main(args):
             maxmeas, maxmeasfile = getMaxMeasurement(measurements, an)
             scaled_maxmeas = getImScale(maxmeas, maxmeasfile)
             study_db[study_name]['max_measure'][an] = scaled_maxmeas
-            study_db[study_name]['max_measure_img'][an] = Path(maxmeasfile.name).stem
+            if maxmeasfile is not None:
+                study_db[study_name]['max_measure_img'][this_anatomy] = Path(maxmeasfile.name).stem
+            else:
+                study_db[study_name]['max_measure_img'][this_anatomy] = ''
 
     print('Found {} studies with fit directories'.format(len(study_db)))
     print('Creating the CSV DB')
