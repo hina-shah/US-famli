@@ -48,6 +48,9 @@ def getMaxMeasurement(json_list, anatomy_name):
                 elif anatomy_name == 'FL':
                     if "min" in fit_description and "max" in fit_description:
                         measurement = scale.distance_points(fit_description["min"], fit_description["max"])
+                        if math.isinf(measurement):
+                            print('Got an infinite fl measurement for file: {}'.format(json_file))
+                            measurement = -1
                 elif anatomy_name == 'BPD':
                     if len(fit_description['radius'])>1:
                         measurement = min(fit_description['radius'])*2
