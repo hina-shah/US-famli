@@ -11,6 +11,15 @@ import json
 import subprocess
 import shutil
 
+def processDir(dir_path):
+    # Does directory exist
+    path_exists = dir_path.exists()
+    if path_exists:
+        # if it exists how many files exist here?
+        path_exists = len(os.listdir(str(dir_path))) > 0
+    print('Process: {} ? {}'.format(dir_path, not path_exists))
+    return not path_exists
+
 def runSegmentationOnFolder(data_folder, path_to_classification='/HOMER_STOR/hinashah', path_to_fit_sh = '/HOMER_STOR/hinashah/predict-sh'):
     output_folder_path = Path(data_folder+'_seg')
     output_fit_folder_path = Path(data_folder+'_seg_fit')
@@ -22,11 +31,12 @@ def runSegmentationOnFolder(data_folder, path_to_classification='/HOMER_STOR/hin
 
     if class_name in class_type_map:
         
-        if not output_folder_path.exists():
+        if processDir(output_folder_path):
             logging.info('Running Segmentation for: {}'.format(data_folder))
             node_source_path = path_to_classification + '/us-famli-nn/bin/index.js'
             utils.checkDir(output_folder_path, False)
             command_list = ['node', node_source_path, '--dir', str(data_folder), '--type', 'remove_calipers', '--type', class_type_map[class_name][0], '--out', str(output_folder_path)]
+            print(command_list)
             try:
                 subprocess.run(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
             except Exception as e:
@@ -34,7 +44,7 @@ def runSegmentationOnFolder(data_folder, path_to_classification='/HOMER_STOR/hin
                 logging.info('Error processing image dump folder: {}'.format(data_folder))
                 return 0
         
-        if not output_fit_folder_path.exists():
+        if processDir(output_fit_folder_path):
             logging.info('Running Fitting for: {}'.format(data_folder))
             utils.checkDir(output_fit_folder_path, False)
             cmd_path = str(Path(path_to_fit_sh) / class_type_map[class_name][1])
@@ -66,9 +76,10 @@ def main(args):
         except Exception as e:
             logging.error('Error while opening the include dir list: {}'.format(e))
             return
-        all_csvs = list( data_folder.glob('**/prediction_*.csv') )
+       
         for sub_dir in include_dirs:
-            sub_dir_list = [csv_file for csv_file in all_csvs if csv_file.match('**/' + sub_dir + '/*/*.csv')]
+            sub_dir = sub_dir.strip('\"')
+            sub_dir_list = list( (data_folder/sub_dir).glob('**/prediction_*.csv') )
             predictions_csv_list.extend(sub_dir_list)
     else:
         predictions_csv_list = list( data_folder.glob('**/prediction_*.csv') )
@@ -116,10 +127,16 @@ def main(args):
                     class_name = line['class']
                     if float(line[class_name]) > threshold:
                         # create a symbolic link for the image
+                        if line['img'].find('dataset_C1_HC_fullset') > -1:
+                            line['img'] = line['img'].replace('dataset_C1_HC_fullset', data_folder.stem)
+
                         frame_path = Path(line['img'])
                         target_frame_name = frame_path.parent.stem + '_' + frame_path.name
                         target_frame_path = study_path/class_biom_map[class_name]/target_frame_name
                         if not target_frame_path.exists():
+                            if target_frame_path.is_symlink():
+                                print('Removing the link: {}'.format(target_frame_path))
+                                os.unlink(str(target_frame_path))
                             os.symlink(line['img'], target_frame_path)
                         # store the path to the folder and symbolic link in class_db
                         class_db[study_name][class_biom_map[class_name]]['images'].append(str(target_frame_path))

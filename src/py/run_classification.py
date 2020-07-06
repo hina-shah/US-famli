@@ -69,8 +69,14 @@ def isStudyCompletelyProcessed(out_study_dir, bs_list):
     for bs_file in bs_list:
         cine_name = Path(bs_file['File']).stem
         prediction_file = out_study_dir/ ('prediction_' + cine_name + '.csv')
-        study_processed = study_processed & prediction_file.exists() & os.stat(str(prediction_file)).st_size > 100
+        study_processed = study_processed & ((out_study_dir/'ImgDump/')/cine_name).exists()
+        if not prediction_file.exists():
+            cine_name = Path(cine_name).stem
+            prediction_file = out_study_dir/ ('prediction_' + cine_name + '.csv')
 
+        study_processed = study_processed & prediction_file.exists() 
+        if prediction_file.exists():
+            study_processed = study_processed & os.stat(str(prediction_file)).st_size > 100
     return study_processed
 
 def main(args):
@@ -96,9 +102,10 @@ def main(args):
         except Exception as e:
             logging.error('Error while opening the include dir list: {}'.format(e))
             return
-        all_csvs = list( data_folder.glob('**/info_corrected.csv') )
         for sub_dir in include_dirs:
-            sub_dir_list = [csv_file for csv_file in all_csvs if csv_file.match('**/' + sub_dir + '/*/*.csv')]
+            sub_dir = sub_dir.strip('\"')
+            #sub_dir_list = [csv_file for csv_file in all_csvs if csv_file.match('**/' + sub_dir + '/*/*.csv')]
+            sub_dir_list = list( (data_folder/sub_dir).glob('**/info_corrected.csv') )
             info_csv_list.extend(sub_dir_list)
     else:
         info_csv_list = list( data_folder.glob('**/info_corrected.csv') )
@@ -144,9 +151,11 @@ def main(args):
                         img_dump_dir = out_study_dir/'ImgDump'
                         utils.checkDir(img_dump_dir, False)
                         logging.info('Dumping images for cine: {}'.format(bs_item['File']))
-                        cine_dump_path = dumpImagesForCine( Path( args.som_working_dir + '/' + bs_item['File']), img_dump_dir)
-                        
-                        if args.run_classification:
+                        cine_dump_path, msg = dumpImagesForCine( Path( args.som_working_dir + '/' + bs_item['File']), img_dump_dir)
+                        if cine_dump_path is None:
+                            logging.info('Ran into issues while')
+
+                        if args.run_classification and cine_dump_path is not None:
                             # Run classification on the imgdump folder
                             logging.info('Run classification for cine: {}'.format(bs_item['File']))
                             runClassificationOnFolder(Path(cine_dump_path), args.path_to_classification, Path(out_study_dir))
