@@ -6,41 +6,41 @@ import logging
 import pydicom
 import numpy as np
 import SimpleITK as sitk
-import cv2
+#import cv2
 
-def dumpImagesForCineMP4(path_to_video, dump_dir, frame_list=None, verbatim=True):
-    msg=''
-    try:
-        cap = cv2.VideoCapture(str(path_to_video))
-        # Check if camera opened successfully
-        if (cap.isOpened() is False): 
-            msg = "Error opening video stream or file"
-            raise IOError(msg)
+# def dumpImagesForCineMP4(path_to_video, dump_dir, frame_list=None, verbatim=True):
+#     msg=''
+#     try:
+#         cap = cv2.VideoCapture(str(path_to_video))
+#         # Check if camera opened successfully
+#         if (cap.isOpened() is False): 
+#             msg = "Error opening video stream or file"
+#             raise IOError(msg)
 
-        if frame_list is None:
-            frame_list = range(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        # Read until video is completed
-        success,image = cap.read()
-        frame_num = 0
-        while success:
-            if frame_num in frame_list:
-                out_frame_path = dump_dir/("frame_{}.jpg".format(frame_num))
-                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                cv2.imwrite( str(out_frame_path), gray)
-                frame_list.remove(frame_num)
-                if len(frame_list)==0:
-                    break
-            # Capture frame-by-frame
-            success, image = cap.read()
-            frame_num+=1    
-        # When everything done, release the video capture object
-        cap.release()
-    except Exception as e:
-        msg = "Error dumping mp4 image frames: {}".format(e)
-        if verbatim:
-            logging.warning(msg)
-    finally:
-        return msg
+#         if frame_list is None:
+#             frame_list = range(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+#         # Read until video is completed
+#         success,image = cap.read()
+#         frame_num = 0
+#         while success:
+#             if frame_num in frame_list:
+#                 out_frame_path = dump_dir/("frame_{}.jpg".format(frame_num))
+#                 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#                 cv2.imwrite( str(out_frame_path), gray)
+#                 frame_list.remove(frame_num)
+#                 if len(frame_list)==0:
+#                     break
+#             # Capture frame-by-frame
+#             success, image = cap.read()
+#             frame_num+=1    
+#         # When everything done, release the video capture object
+#         cap.release()
+#     except Exception as e:
+#         msg = "Error dumping mp4 image frames: {}".format(e)
+#         if verbatim:
+#             logging.warning(msg)
+#     finally:
+#         return msg
 
 def dumpImagesForCine(cine_file_path, out_dir, store_jpg = False, frame_list = None, verbatim=True):
     msg = ''
@@ -53,9 +53,9 @@ def dumpImagesForCine(cine_file_path, out_dir, store_jpg = False, frame_list = N
     utils.checkDir(out_path, False)
 
     # Check if this is a dicom or an mp4 file:
-    if (cine_file_path.suffix).lower() == '.mp4':
-        msg = dumpImagesForCineMP4(path_to_video=cine_file_path, dump_dir=out_path, frame_list=frame_list)
-        return out_path, msg
+    # if (cine_file_path.suffix).lower() == '.mp4':
+    #     msg = dumpImagesForCineMP4(path_to_video=cine_file_path, dump_dir=out_path, frame_list=frame_list)
+    #     return out_path, msg
 
 
     if (cine_file_path.suffix).lower() not in ['.dcm', '.dicom']:
@@ -116,7 +116,7 @@ def main(args):
     data_folder = Path(args.dir)
     out_dir = Path(args.out_dir)
 
-    utils.checkDir(out_dir)
+    utils.checkDir(out_dir, False)
 
     if data_folder.is_dir():
         # Populate the filenames21
@@ -148,10 +148,9 @@ def main(args):
     print('---- DONE ----')
 
 if __name__=="__main__":
-# /Users/hinashah/famli/Groups/Restricted_access_data/Clinical_Data/EPIC/Dataset_B
     parser = ArgumentParser()
-    parser.add_argument('--dir', type=str, help='Study directory')
-    parser.add_argument('--out_dir', type=str, help='Output folder name')
+    parser.add_argument('--dir', type=str, help='Study directory', required=True)
+    parser.add_argument('--out_dir', type=str, help='Output folder name', required=True)
     parser.add_argument('--store_jpg', action='store_true', help='Store the JPG images')
     parser.add_argument('--debug', action='store_true', help='Add debug info in log')
     args = parser.parse_args()
