@@ -1,5 +1,5 @@
 
-FROM tensorflow/tensorflow:1.15.2-py3-jupyter
+FROM tensorflow/tensorflow:1.15.2-gpu-py3-jupyter
 
 WORKDIR /usr/src/US-famli
 COPY . .
