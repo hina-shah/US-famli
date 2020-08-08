@@ -95,14 +95,14 @@ def checkDir(dir_path, delete=True):
     if not dir_path.is_dir():
         dir_path.mkdir(parents=True)
 
-def extractImageArrayFromUS(file_path, out_dir, rescale_size):
+def extractImageArrayFromUS(file_path, out_dir=None, rescale_size=None):
 
     file_str = str(file_path)
 
     # Make sure path exists
     if not Path(file_path).exists():
         logging.warning('File: {} does not exist,returning'.format(file_str))
-        return None
+        return None, None, None
 
     # Create the output path
     out_path = None
@@ -110,15 +110,15 @@ def extractImageArrayFromUS(file_path, out_dir, rescale_size):
         out_path = out_dir / (file_path.stem + '.jpg')
 
     # Double check that the extension is a dicom
-    if file_path.suffix != '.dcm':
+    if file_path.suffix.lower() != '.dcm':
         logging.warning('Image {} not a dicom, returning'.format(file_str))
-        return None
+        return None, None, None
 
     # read the metadata header
     ds = pydicom.read_file(file_str)
     if ds is None:
         logging.warning('File: {} Missing DICOM metadata'.format(file_str))
-        return None
+        return None, None, None
     
     np_frame = None
     us_type = 'Unknown'
