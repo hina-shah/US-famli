@@ -15,7 +15,7 @@ def dumpFramesForOneCase(case_dict):
     try:
         path_to_video = Path(video_file)
         if (path_to_video.suffix).lower() in  ['.dcm', '.mp4']:
-            out_path, msg = dumpImagesForCine(path_to_video, Path(out_dir), store_jpg = True, frame_list = frame_list, verbatim=False)
+            out_path, msg = dumpImagesForCine(path_to_video, Path(out_dir), store_jpg = False, frame_list = frame_list, verbatim=False)
             if out_path is not None:
                 frame_paths = [ str(out_path/("frame_{}.jpg".format(l))) for l in panda_df['frame'].tolist() ]
                 panda_df['frame_path'] = frame_paths
@@ -59,7 +59,7 @@ def frame_dump_proc(queue):
             map_queue_to_pool(internal_queue)
             internal_queue = []
 
-def getFrameList(annotation_list, annotators, n_frames_thres):
+def getFrameList(annotation_list, annotators, n_frames_thres, only_measurable):
     '''
     This function takes a list of annotations, and looks for the 'measurability' 
     tag in the results tag.
@@ -83,7 +83,11 @@ def getFrameList(annotation_list, annotators, n_frames_thres):
         if annotator in annotators:
             measures = a['results']['measurability']
             if len(measures) >= n_frames_thres:
-                frames = { m[0] for m in measures if m[1][0] in ['measurable', 'visible'] }
+
+                result_list = ['measurable']
+                if not only_measurable:
+                    result_list.append('visible')
+                frames = { m[0] for m in measures if m[1][0] in result_list }
                 # Find the name of the anatomy
                 # Using All measurability/visibility tasks. Not separating them. 
                 # If an anatomy is measurable it will be visibile as well
@@ -134,13 +138,20 @@ def main(args):
         frame_dump_p = Process(target=frame_dump_proc, args=(squeue,))
         frame_dump_p.start()
 
-    # Look for measured/visible anntoations
+    # Look for measured/visible annotations
     cases_with_ann =  [s for s in files_list if 'annotations' in s] 
     annt_res = 0
     annt_meas = 0
     results_keys = []
     cine_paths = set()
     for case in cases_with_ann:
+        if args.ignore_butterfly is True:
+            manufacturer = case['file_metadata']['Manufacturer']
+            if 'butterfly' in manufacturer.lower():
+                if args.debug:
+                    print('Skipping butterfly case: {}'.format(case['file_key']))
+                continue
+
         annotations = case['annotations']
         with_results = [a for a in annotations if 'results' in a]
         with_meas = [ a for a in annotations if ('results' in a and 'measurability' in a['results']) ]
@@ -159,13 +170,13 @@ def main(args):
                 continue
             # Some annotations are present
             # Call the function to get the final frame list from the annotations.
-            df = getFrameList(with_meas, ['enam', 'adiaz', 'arellanes'], args.n_frames_thres)
+            df = getFrameList(with_meas, ['enam', 'adiaz', 'arellanes'], args.n_frames_thres, args.only_measurable)
             if df is not None:
                 # Call the frames dump routine - this should be the threaded version.
                 case_dict = { 'file':str(cine_path), 'out':str(out_images_dir), 'df':df}
                 squeue.put(case_dict)
                 annt_res +=1
-        if annt_res==15 and args.debug:
+        if annt_res==30 and args.debug:
             break
     
     squeue.put('DONE')
@@ -189,6 +200,8 @@ if __name__=="__main__":
     parser.add_argument('--server_path', type=str, help='Path to the server space where data exists', required=True)
     parser.add_argument('--debug', type=bool, help='Enable debug mode, just processes first 15 annotations', default=False)
     parser.add_argument('--dump_frames', type=bool, help='Dum frames?', default=True)
+    parser.add_argument('--ignore_butterfly', type=bool, help='Ignore butterfly manufacturer', default=False)
+    parser.add_argument('--only_measurable', type=bool, help='Use only images annotated as measurable', default=False)
     args = parser.parse_args()
 
     main(args)
