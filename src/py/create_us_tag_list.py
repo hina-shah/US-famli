@@ -1,5 +1,17 @@
 #!/usr/bin/env python
 
+'''
+This is a script to run OCR on all the study folders in the input directory.
+It replicates the directory structure in the output directory.
+- The output directory structure also has info.csv in each study folder which lists the image type, and tag for the file
+- The tags are read from a specified bounding box in the ultrasound image
+- For cines, the tag is extracted from the middle frame of the video
+- If the directory structure already exists, this won't overwrite the results
+- Parallel processing is used whenever possible to speed up the process.
+
+Author: Hina Shah
+'''
+
 from pathlib import Path
 import os
 import csv
@@ -100,8 +112,11 @@ def main(args):
     # Approximate bounding box of where the tag is written acoording to the 
     # us model
     tag_bounding_box = { 'V830':[[40,75], [255,190]],
-                        'LOGIQe':  [[0,55], [200,160]],
-                         'Voluson S': [[40,75], [255,190]]}
+                         'LOGIQe':  [[0,55], [200,160]],
+                         'Voluson S': [[40,75], [255,190]],
+                         'LOGIQeCine': [[0,0],[135,90]],
+                         'Turbo': [[75,20,],[230,80]]
+                        }
 
     # list of ultrasound image types whose tags we do not care about right now.
     non_tag_us = ['Unknown', 'ge kretz image', 'Secondary capture image report',
@@ -115,8 +130,8 @@ def main(args):
     except:
         logging.warning('ERROR READING THE TAG FILE')
         tags = ['M', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R15', 'R45', 'R0', 'RO', 'R1',
-                    'L15', 'L45', 'L0', 'LO', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
-
+                    'L15', 'L45', 'L0', 'LO', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC', 
+                    '3D1', 'RLQ', 'RUQ', 'LUQ', 'LLQ', 'EQ']
     tag_statistic = dict.fromkeys(tag_list, 0)
     tag_statistic['Unknown'] = 0
     tag_statistic['Undecided'] = 0
