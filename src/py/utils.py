@@ -32,3 +32,19 @@ def writeCSVRows(file_path, rows, field_names):
         logging.error('OS Error occured while writing to file: {}'.format(file_path))
     except:
         logging.error('Error while attempting to write to csv file: {}'.format(file_path))
+
+def getCineTagsList(in_tags_string):
+    tags=  []
+    if not in_tags_string:
+        tag_list_file = 'us_cine_tags.txt'
+        try:
+            # WARNING: If this file moves, the path here should also change.
+            with open(Path(__file__).parent / tag_list_file) as f:
+                tags = f.read().splitlines()
+        except:
+            print('ERROR READING THE TAG FILE')
+            tags = ['M', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R15', 'R45', 'R0', 'RO', 'R1',
+                        'L15', 'L45', 'L0', 'LO', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
+    else:
+        tags = (in_tags_string).split()
+    return tags
