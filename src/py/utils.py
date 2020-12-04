@@ -48,3 +48,21 @@ def getCineTagsList(in_tags_string):
     else:
         tags = (in_tags_string).split()
     return tags
+
+def getTagsList(in_tags_string):
+    tags=  []
+    if not in_tags_string:
+        tag_list_file = 'us_tags.txt'
+        try:
+            # WARNING: If this file moves, the path here should also change.
+            with open(Path(__file__).parent / tag_list_file) as f:
+                tags = f.read().splitlines()
+        except:
+            print('ERROR READING THE TAG FILE')
+            tags = ['DVP','TCD','BREECH','ML','CEPHALIC','MR','POST PLAC','ANT PLAC','FUND PLAC','LEFT PLAC','RIGHT PLAC',
+                    'CERVIX','PREVIA','LOW PLAC','CRL','BPD','HC','AC','FL','TCD',
+                    'M','L0','LO','L1','R0','RO','R1','R15','L15','R45','L45',
+                    'RTA','RTB','RTC','C1','C2','C3','C4','C5','C6','3D1','LUQ','LLQ','RLQ','RUQ','EQ','FUNDUS']
+    else:
+        tags = (in_tags_string).split()
+    return tags

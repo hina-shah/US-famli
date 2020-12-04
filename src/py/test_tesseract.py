@@ -10,13 +10,13 @@ import re
 from argparse import ArgumentParser
 import csv
 import time
-
+import utils
 
 def main(args):
     image_list = []
     if args.dir:
         image_dir = Path(args.dir)
-        image_list = list( image_dir.glob('**/*.DCM') )
+        image_list = list( image_dir.glob('**/*.dcm') )
         if len(image_list) == 0:
             image_list = list( image_dir.glob('**/*.jpg') )
     else:
@@ -33,8 +33,14 @@ def main(args):
                 print('US TYPE: {}, MODEL: {}'.format(us_type, us_model))
             
                 # convert to sitk
-                sitk_image = sitk.GetImageFromArray(np_frame)
-                size = sitk_image.GetSize()
+                #if np_frame is not None:
+                # OR if you want to only process cine:
+                if us_type == 'cine' and np_frame is not None: 
+                    sitk_image = sitk.GetImageFromArray(np_frame)
+                    size = sitk_image.GetSize()
+                else:
+                    print('Not an image type')
+                    continue
             else:
                 sitk_image = sitk.ReadImage(str(image_path))
                 if sitk_image.GetNumberOfComponentsPerPixel() == 3:
@@ -70,6 +76,10 @@ def main(args):
                 [size[i] - bounding_box[1][i] for i in range(Dimension)])
             start = time.time()
             # tag = famlitesseract.processBoundingBox(tmp_image, tag_list=['HC', 'FL', 'AC', 'TCD'], debug=False)
+
+            # TO GRAB ALL tags:
+            # tag_list = utils.getTagsList()
+
             tag = famlitesseract.processBoundingBox(tmp_image, tag_list=['IM', 'ILO', 'IRO', 'IL0', 'IM0'], debug=False)
             end = time.time()
             print('Image path: {}'.format(image_path))

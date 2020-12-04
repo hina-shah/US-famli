@@ -14,6 +14,7 @@ def getTesseractTagLine(np_array, pattern = None, tag_list = None, single_line=F
     tag_list: is a list of strings acceptable as tags
     NOTE/TODO: spaces are ignored in the tag list right now. 
     So, POST PLAC, ANT PLAC, etc are not recognized yet.
+    pattern: is an re expression in UPPER CASE
     """
     
     if single_line:
@@ -23,7 +24,7 @@ def getTesseractTagLine(np_array, pattern = None, tag_list = None, single_line=F
     data = pytesseract.image_to_data(np_array, output_type= pytesseract.Output.DICT, config=config_file)
     final_tag = ('Undecided', -1)
     if len(data['conf']) == 1 and data['conf'][0] == '-1':
-        print('No text found')
+        # print('No text found')
         return final_tag
     
     # print(data)
