@@ -3,6 +3,7 @@ import logging
 
 import pydicom
 import SimpleITK as sitk
+import numpy as np
 
 class DCMIO:
     '''
@@ -55,7 +56,7 @@ class DCMIO:
             self.us_type = 'cine'
         elif self.sopclass == '1.2.840.10008.5.1.4.1.1.6.1':
             # See if if's a GE Kretz volume:
-            if ['7fe1', '0011'] not in ds:
+            if ['7fe1', '0011'] not in self.ds:
                 # Not a Kretz volume, continue
                 logging.debug('processing as an image')
                 self.us_type = '2d image'
