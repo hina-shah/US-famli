@@ -1,7 +1,8 @@
 from pathlib import Path
 from sys import platform
 import logging
-from csvwrap import CSVWrap
+import os
+from FamliFileIO.csvwrap import CSVWrap
 
 class TagInfoFile():
     '''
@@ -11,7 +12,6 @@ class TagInfoFile():
     file_name = 'tags.csv'
 
     def __init__(self, study_dir):
-        
         # study dir is the output folder where the tag file will be written
         if isinstance(study_dir, str):
             self.study_dir = Path(study_dir)
@@ -23,18 +23,42 @@ class TagInfoFile():
         self.file_name = TagInfoFile.file_name
         self.tag_info_file = self.study_dir/TagInfoFile.file_name
         self.file_tag_dict = []
+        self.tag_statistic = {}
 
-    def get_file_path(self):
+    def exists(self):
+        return self.tag_info_file.exists()
+
+    def getFilePath(self):
+        """
+        Get complete path for the tag info
+        """
         return tag_info_file
-    
-    def check_keys(self, keys_list):
+
+    def checkKeys(self, keys_list):
         return 'File' in keys_list and 'type' in keys_list and 'tag' in keys_list
+
+    def createTagStatistics(self):
+        self.tag_statistic = {}
+        for row in self.file_tag_dict:
+            if row['tag'] not in self.tag_statistic:
+                self.tag_statistic[row['tag']] = 0
+            self.tag_statistic[row['tag']] += 1
+
+    def updateTagStatistics(self, tag):
+        if tag not in self.tag_statistic:
+            self.tag_statistic[tag] = 0
+        self.tag_statistic[tag] += 1
 
     def read(self):
         try:
             rows, keys = CSVWrap.readCSV(self.tag_info_file )
-            if rows is not None and self.check_keys(keys):
+            if len(rows) > 0 and \
+                rows is not None and \
+                    self.checkKeys(keys):
                 self.file_tag_dict = rows
+                self.tag_statistic = {}
+                self.createTagStatistics()
+
         except Exception as e:
             logging.error('Error reading the tag file')
             self.file_tag_dict = []
@@ -68,6 +92,7 @@ class TagInfoFile():
         row['tag'] = tag
 
         self.file_tag_dict.append(row)
+        self.updateTagStatistics(tag)
         if write:            
             CSVWrap.writeCSV([row], self.tag_info_file, append=True)
 
@@ -88,12 +113,35 @@ class TagInfoFile():
         return self.study_dir
 
     def setStudyDIr(self, study_dir):
+        """
+        Set the directory where the tag info file will be stored.
+        """
         if isinstance(study_dir, str):
             self.study_dir = Path(study_dir)
         elif isinstance(study_dir, Path):
             self.study_dir = study_dir
         else:
             raise TypeError(('Study DIR path object is of the wrong type'))
-    
+
     def getNumFiles(self):
         return len(self.file_tag_dict)
+
+    def clear(self):
+        self.file_tag_dict=[]
+        self.tag_statistic={}
+
+    def getAllRows(self):
+        return self.file_tag_dict
+
+    def getDictWithNameKeys(self):
+        dict_to_return = {}
+        for row in self.file_tag_dict:
+            name = Path(row['File']).name
+            dict_to_return[name] = {}
+            dict_to_return[name] = [row['type'], row['tag']]            
+        return dict_to_return
+    
+    def deleteTagFile(self):
+        if self.tag_info_file.exists():
+            logging.warning('DELETING the tag file {}'.format(self.tag_info_file))
+            os.remove(self.tag_info_file)
