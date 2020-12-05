@@ -44,7 +44,8 @@ def getCineTagsList(in_tags_string):
         except:
             print('ERROR READING THE TAG FILE')
             tags = ['M', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'R15', 'R45', 'R0', 'RO', 'R1',
-                        'L15', 'L45', 'L0', 'LO', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC']
+                    'L15', 'L45', 'L0', 'LO', 'L1', 'M0', 'M1', 'RTA', 'RTB', 'RTC', 
+                    '3D1', 'RLQ', 'RUQ', 'LUQ', 'LLQ', 'EQ']
     else:
         tags = (in_tags_string).split()
     return tags
