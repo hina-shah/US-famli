@@ -33,7 +33,7 @@ def writeCSVRows(file_path, rows, field_names):
     except:
         logging.error('Error while attempting to write to csv file: {}'.format(file_path))
 
-def getCineTagsList(in_tags_string):
+def getCineTagsList(in_tags_string=None):
     tags=  []
     if not in_tags_string:
         tag_list_file = 'us_cine_tags.txt'
@@ -50,7 +50,7 @@ def getCineTagsList(in_tags_string):
         tags = (in_tags_string).split()
     return tags
 
-def getTagsList(in_tags_string):
+def getTagsList(in_tags_string= None):
     tags=  []
     if not in_tags_string:
         tag_list_file = 'us_tags.txt'
