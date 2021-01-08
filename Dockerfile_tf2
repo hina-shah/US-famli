@@ -1,0 +1,9 @@
+FROM tensorflow/tensorflow:2.0.1-py3-jupyter
+
+WORKDIR /usr/src/app
+
+COPY requirements_tf2.txt ./
+RUN pip install --no-cache-dir -r requirements_tf2.txt
+RUN apt-get update && apt-get install -y tesseract-ocr && apt-get clean
+
+COPY . .
