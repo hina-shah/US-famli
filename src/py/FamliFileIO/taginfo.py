@@ -32,7 +32,7 @@ class TagInfoFile():
         """
         Get complete path for the tag info
         """
-        return tag_info_file
+        return self.tag_info_file
 
     def checkKeys(self, keys_list):
         return 'File' in keys_list and 'type' in keys_list and 'tag' in keys_list
@@ -93,9 +93,13 @@ class TagInfoFile():
 
         self.file_tag_dict.append(row)
         self.updateTagStatistics(tag)
-        if write:            
+        if write:
             CSVWrap.writeCSV([row], self.tag_info_file, append=True)
 
+    def getFileNamesWithTags(self, tag_list):
+        file_names = [ {'File':file_row['File'], 'tag':file_row['tag']}  for file_row in self.file_tag_dict if file_row['tag'] in tag_list]
+        return file_names
+    
     def getFileNamesWithTag(self, tag):
         file_names = [ file_row['File']  for file_row in self.file_tag_dict if file_row['tag'] == tag]
         return file_names
@@ -111,6 +115,9 @@ class TagInfoFile():
 
     def getStudyDir(self):
         return self.study_dir
+
+    def getStudyName(self):
+        return self.study_dir.stem 
 
     def setStudyDIr(self, study_dir):
         """
@@ -138,9 +145,9 @@ class TagInfoFile():
         for row in self.file_tag_dict:
             name = Path(row['File']).name
             dict_to_return[name] = {}
-            dict_to_return[name] = [row['type'], row['tag']]            
+            dict_to_return[name] = [row['type'], row['tag']]
         return dict_to_return
-    
+
     def deleteTagFile(self):
         if self.tag_info_file.exists():
             logging.warning('DELETING the tag file {}'.format(self.tag_info_file))

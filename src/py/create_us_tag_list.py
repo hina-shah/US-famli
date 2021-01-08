@@ -28,7 +28,6 @@ import numpy as np
 from FamliImgIO import dcmio
 from FamliFileIO import taginfo
 from FamliOCR import famlitesseract as tess
-import extracttagtext
 import utils
 
 def getStudyOutputFolder(study, data_folder, out_parent_folder):
