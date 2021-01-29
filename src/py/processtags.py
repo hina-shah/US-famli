@@ -24,7 +24,9 @@ def getTagDirPathListFile(out_folder, tag):
                     "CI": "C1",
                     "LO": "L0",
                     "RO": "R0",
-                    "3DI": "3D1"
+                    "3DI": "3D1",
+                    "Undecided": "Unknown",
+                    "No tag": "Unknown"
                     }
     if tag in replacements:
         tag = replacements[tag]
@@ -43,6 +45,8 @@ def main(args):
         tags = utils.getCineTagsList(args.tags)
     else:
         tags = utils.getTagsList(args.tags)
+    if args.add_unkwown:
+        tags.extend(['Unknown', 'Undecided', 'No tag'])
     print('Tags: {}'.format(tags))
 
     try:
@@ -75,7 +79,7 @@ def main(args):
             gt_ga = {}
         print('Found {} studies with GT Ga'.format(len(gt_ga)))
 
-    bounding_box = [[0,0], [255,250]]
+    bounding_box = [[0,0], [255,255]]
     # Find all the info.csv files:
     tag_file_names = list( data_folder.glob('**/' + taginfo.TagInfoFile.file_name ))
     tag_file_list_rows = []
@@ -85,16 +89,23 @@ def main(args):
         files_to_copy = []
         tag_file_info = taginfo.TagInfoFile(tag_file.parent)
         tag_file_info.read()
-        file_tag_pairs = tag_file_info.getFileNamesWithTags(tags)
-        
+        tags_type = 'cine' if args.cine_mode else None
+        file_tag_pairs = tag_file_info.getFileNamesWithTags(tags, tags_type)
+
         if len(file_tag_pairs) == 0:
             continue
-        # print(file_tag_pairs[0])
 
         for file_tag_dict in file_tag_pairs:
             file_name = Path(file_tag_dict['File']).name
             name_no_suffix = Path(file_name).stem
             jpg_file_name = tag_file.parent/(name_no_suffix+'.jpg')
+
+            tag = file_tag_dict['tag']
+            tag_folder, out_tag_list_file_path, out_tag = getTagDirPathListFile(out_folder, tag)
+
+            target_simlink_name = tag_folder/file_name
+            out_jpg_name = tag_folder/(name_no_suffix+'.jpg')
+            
 
             cropped = None
             if jpg_file_name.exists():
@@ -106,11 +117,7 @@ def main(args):
                 else:
                     cropped = simage
             
-            tag = file_tag_dict['tag']
-            tag_folder, out_tag_list_file_path, out_tag = getTagDirPathListFile(out_folder, tag)
             
-            target_simlink_name = tag_folder/file_name
-
             # Get the data for the global list
             if args.create_global_list:
                 if target_simlink_name.exists():
@@ -118,7 +125,7 @@ def main(args):
                     study_name = (tag_file.parent).name
                     pos = study_name.find('_')
                     if pos == -1:
-                        logging.warning("Study name in path {} not in the correct format for a valid study".format(study_path))
+                        logging.warning("Study name in path {} not in the correct format for a valid study".format(tag_file.parent))
                         continue
 
                     study_id = study_name[:pos]
@@ -140,18 +147,18 @@ def main(args):
                 continue
 
             # If not in global list generation mode, deal with the file based on what has been requested.
-            out_jpg_name = tag_folder/(name_no_suffix+'.jpg')
-            if os.path.exists(target_simlink_name):
-                # count all files with that link
-                logging.info('<---Found duplicates! ----> ')
-                ext = Path(file_name).suffix
-                all_target_simlink_files = list( Path(tag_folder).glob(stem+'*'+ext) )
-                new_name = stem+'_'+str(len(all_target_simlink_files))+ext
-                target_simlink_name = tag_folder/new_name
-                new_name = stem+'_'+str(len(all_target_simlink_files))+'.jpg'
-                out_jpg_name = tag_folder/(new_name+'.jpg')
             
-            if cropped is not None:
+            # if os.path.exists(target_simlink_name):
+            #     # count all files with that link
+            #     logging.info('<---Found duplicates! ----> ')
+                # ext = Path(file_name).suffix
+                # all_target_simlink_files = list( Path(tag_folder).glob(name_no_suffix+'*'+ext) )
+                # new_name = name_no_suffix+'_'+str(len(all_target_simlink_files))+ext
+                # target_simlink_name = tag_folder/new_name
+                # new_name = name_no_suffix+'_'+str(len(all_target_simlink_files))+'.jpg'
+                # out_jpg_name = tag_folder/(new_name+'.jpg')
+            
+            if cropped is not None :
                 logging.info('Writing jpg image: {}'.format(out_jpg_name))
                 sitk.WriteImage(cropped, str(out_jpg_name))
             
@@ -161,7 +168,7 @@ def main(args):
                 try:
                     shutil.copyfile(source_file, target_simlink_name)
                 except FileNotFoundError:
-                    logging.warning("Couldn't find file: {}".format(file))
+                    logging.warning("Couldn't find file: {}".format(source_file))
                     continue
                 except PermissionError:
                     logging.warning("Didn't have enough permissions to copy to target: {}".format(target_simlink_name))
@@ -196,7 +203,7 @@ if __name__=="__main__":
     
     parser.add_argument('--create_global_list', action='store_true', help='Global list creation mode, this will create a global list of files, and assign a ga to each file.')
     parser.add_argument('--gt_ga_list', type=str, help='Path to the csv with ground truth GA by Study IDs')
-    
+    parser.add_argument('--add_unkwown', action='store_true', help='If true, will create a folder for unknown tags')
     args = parser.parse_args()
 
     main(args)
