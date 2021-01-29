@@ -3,6 +3,7 @@ L0
 LO
 L1
 LI
+L2
 R0
 RO
 R1
@@ -21,5 +22,9 @@ CI
 C2
 C3
 C4
-C5
-C6
+NC1
+NCI
+NC2
+NL
+NM
+NR
