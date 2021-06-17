@@ -24,7 +24,9 @@ def getTagDirPathListFile(out_folder, tag):
                     "CI": "C1",
                     "LO": "L0",
                     "RO": "R0",
-                    "3DI": "3D1"
+                    "3DI": "3D1",
+                    "Undecided": "Unknown",
+                    "No tag": "Unknown"
                     }
     if tag in replacements:
         tag = replacements[tag]
@@ -70,14 +72,26 @@ def main(args):
                         gt_ga[line['StudyID']]['ga_avua'] = int(line['ga_avua'])
                     else:
                         gt_ga[line['StudyID']]['ga_avua'] = -1
+                    gt_ga[line['StudyID']]['source'] = line['source']
         except OSError as e:
             logging.error('Error reading the gt ga file {} \n Error: {}'.format(args.gt_ga_list, e))
             gt_ga = {}
         print('Found {} studies with GT Ga'.format(len(gt_ga)))
 
-    bounding_box = [[0,0], [255,250]]
+    bounding_box = [[0,0], [256,256]]
     # Find all the info.csv files:
     tag_file_names = list( data_folder.glob('**/' + taginfo.TagInfoFile.file_name ))
+
+    if args.dir_list:
+        with open(args.dir_list, 'r') as f:
+            dir_list_to_process = [r.strip() for r in f.readlines()]
+        if len(dir_list_to_process) > 0:
+            print("Found {} directoreies to process in the list".format(len(dir_list_to_process)))
+        study_ids = [tag_file.parent.name.split('_')[0] for tag_file in tag_file_names]
+        to_process_studies = [ tag_file for (tag_file, iid) in zip(tag_file_names, study_ids) if iid in dir_list_to_process ]
+        print("Will process tags for {} studies".format(len(to_process_studies)))
+        tag_file_names = to_process_studies
+
     tag_file_list_rows = []
  
     for tag_file in tag_file_names:
@@ -128,9 +142,11 @@ def main(args):
                     if len(gt_ga) > 0 and study_id in gt_ga:
                         tag_file_row['ga_boe'] = str(gt_ga[study_id]['ga_boe']) if gt_ga[study_id]['ga_boe'] > 0 else ''
                         tag_file_row['ga_avua'] = str(gt_ga[study_id]['ga_avua']) if gt_ga[study_id]['ga_avua'] > 0 else ''
+                        tag_file_row['source'] = gt_ga[study_id]['source']
                     else:
                         tag_file_row['ga_boe'] = ''
                         tag_file_row['ga_avua'] = ''
+                        tag_file_row['source'] = ''
 
                     tag_file_row['file_path'] = target_simlink_name
                     tag_file_row['tag'] = out_tag
@@ -196,7 +212,7 @@ if __name__=="__main__":
     
     parser.add_argument('--create_global_list', action='store_true', help='Global list creation mode, this will create a global list of files, and assign a ga to each file.')
     parser.add_argument('--gt_ga_list', type=str, help='Path to the csv with ground truth GA by Study IDs')
-    
+    parser.add_argument('--dir_list', type=str, help='List of directories to be processed')
     args = parser.parse_args()
 
     main(args)

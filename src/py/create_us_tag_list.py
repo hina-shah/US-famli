@@ -76,6 +76,12 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
         # clear the tags stored in the file. (This does not delete the file, just empties the data structure)
         tag_manager.clear()
         tag_manager.deleteTagFile()
+    elif tag_manager.exists():
+        # File already exists, return.
+        tag_manager.read()
+        tag_statistic = tag_manager.tag_statistic
+        return tag_statistic
+
 
     for file_path in file_paths:
         logging.debug("FILE {}: {}".format(i, str(file_path)))
@@ -116,7 +122,7 @@ def extractTagForStudy(study, data_folder, out_images_dir, tag_list, non_tag_us,
                 us_type not in non_tag_us and \
                 capture_model in tag_bounding_box.keys():
                 # Run tag extraction
-                tag = tess.extractTagFromFrame(np_frame, tag_bounding_box[capture_model], tag_list)
+                tag = tess.extractTagFromFrame(np_frame, tag_bounding_box[capture_model], tag_list, greedy=greedy)
             end = time.time()
             logging.debug('Tag extraction took : {} seconds'.format(end-start))
             del np_frame
@@ -147,7 +153,9 @@ def main(args):
     for dirname, dirnames, __ in os.walk(str(data_folder)):
         if len(dirnames) == 0:
             studies.append(Path(dirname))
-            
+    # Reversing the list to process the newer ones first
+    studies.reverse()
+
     logging.info('Found {} studies '.format(len(studies)))
     print('Found {} studies '.format(len(studies)))
     
@@ -164,16 +172,19 @@ def main(args):
                          'LOGIQe':  [[0,55], [200,160]],
                          'Voluson S': [[40,75], [255,190]],
                          'LOGIQeCine': [[0,0],[135,90]],
-                         'Turbo': [[75,20,],[230,80]],
-                         'Voluson E8': [[40,75], [255,250]]
+                         'Turbo': [[75,20],[230,80]],
+                         'Voluson E8': [[40,75], [255,250]],
+                         'iQ Probe': [[0,0], [235, 225]],
+                         'C3HD': [[0,0], [200,165]]
                         }
 
     # list of ultrasound image types whose tags we do not care about right now.
     non_tag_us = ['Unknown', 'Secondary capture image report',
                     'Comprehensive SR', '3D Dicom Volume']
 
-    
+
     # Also read in study directories that might have been finished by a previous run - do not want to rerun them again
+    # WARNING: finished_studies.txt should only contain names of the directories, not full paths
     finished_study_file = out_images_dir/'finished_studies.txt'
     finished_studies = None
     if finished_study_file.exists():
@@ -182,12 +193,13 @@ def main(args):
             finished_studies = [study for study in finished_studies if study.strip()]
     if finished_studies is not None:
         logging.info('Found {} finished studies'.format(len(finished_studies)))
-        cleaned_studies = [study for study in studies if str(study) not in finished_studies]
+        cleaned_studies = [study for study in studies if study.name not in finished_studies]
         # Get statistics for the finished studies
         for study in finished_studies:
             logging.info('Will skip: {}'.format(study))
             try:
-                infocsv_dir = getStudyOutputFolder(Path(study), data_folder, out_images_dir)
+                study_dt = study.split('_')[1] # Assuming format StudyID_YYYYMMDD_HHMMSS
+                infocsv_dir = out_images_dir/Path(study_dt[0:4]+'-'+study_dt[4:6])/study # Assuming a directory structure
                 logging.info('Opening: {}'.format(infocsv_dir))
                 tag_file_man =taginfo.TagInfoFile(infocsv_dir)
                 tag_file_man.read()
@@ -195,7 +207,7 @@ def main(args):
                     for tag in tag_file_man.tag_statistic:
                         if tag not in tag_statistic:
                             tag_statistic[tag] = 0
-                        tag_statistic[tag] += tag_file_man.tag_statistic[tag]        
+                        tag_statistic[tag] += tag_file_man.tag_statistic[tag]
             except (OSError, ValueError) as err:
                 logging.warning('Error reading previously created tags.csv for subject: {}: {}'.format(study, err))
             except:
@@ -205,8 +217,21 @@ def main(args):
         cleaned_studies = studies
     del studies
 
+    logging.info("Will process {} studies".format(len(cleaned_studies)))
+    print("Will process {} studies".format(len(cleaned_studies)))
+
+    if args.dir_list:
+        with open(args.dir_list, 'r') as f:
+            dir_list_to_process = [r.strip() for r in f.readlines()]
+        if len(dir_list_to_process) > 0:
+            print("Found {} directoreies to process in the list".format(len(dir_list_to_process)))
+        study_ids = [study.name.split('_')[0] for study in cleaned_studies]
+        to_process_studies = [ study for (study, iid) in zip(cleaned_studies, study_ids) if iid in dir_list_to_process ]
+        cleaned_studies = to_process_studies
+        print("Will run OCR on {} studies".format(len(cleaned_studies)))
+
     if args.use_threads:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             # Start the load operations and mark each future with its URL
             future_tags = {executor.submit(extractTagForStudy, study, 
                                             data_folder, out_images_dir, tag_list,
@@ -220,7 +245,7 @@ def main(args):
                 for key, value in this_tag_statistic.items():
                     tag_statistic[key] += value
                 with open(finished_study_file, "a+") as f:
-                    f.write(str(d)+os.linesep)
+                    f.write(d.name+os.linesep)
     else:
         i=1
         for study in cleaned_studies:
@@ -255,6 +280,7 @@ if __name__=="__main__":
     parser.add_argument('--debug', action='store_true', help='Add debug info in log')
     parser.add_argument('--use_threads', action='store_true', help='Use threads to run the code')
     parser.add_argument('--greedy', action='store_true', help='If given, will retry to extract tags for files that were processed previously')
+    parser.add_argument('--dir_list', type=str, help='List of directories to be processed')
     args = parser.parse_args()
 
     main(args)
