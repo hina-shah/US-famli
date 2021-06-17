@@ -96,8 +96,8 @@ class TagInfoFile():
         if write:
             CSVWrap.writeCSV([row], self.tag_info_file, append=True)
 
-    def getFileNamesWithTags(self, tag_list):
-        file_names = [ {'File':file_row['File'], 'tag':file_row['tag']}  for file_row in self.file_tag_dict if file_row['tag'] in tag_list]
+    def getFileNamesWithTags(self, tag_list, tag_type=None):
+        file_names = [ {'File':file_row['File'], 'tag':file_row['tag']}  for file_row in self.file_tag_dict if file_row['tag'] in tag_list and (tag_type is None or file_row['type'] == tag_type)]
         return file_names
     
     def getFileNamesWithTag(self, tag):
@@ -152,3 +152,19 @@ class TagInfoFile():
         if self.tag_info_file.exists():
             logging.warning('DELETING the tag file {}'.format(self.tag_info_file))
             os.remove(self.tag_info_file)
+
+    @staticmethod
+    def CompileFinishedStudies(dir_with_tags):
+        """
+        Method to write out a finished_studies.txt with the names of the studies (i.e. directory parents to tags.csv)
+        """
+        try:
+            tag_file_name = TagInfoFile.file_name
+            finished_studies = list(dir_with_tags.glob("**/"+tag_file_name))
+            fsd = [(study.parent).name for study in finished_studies]
+            with open(dir_with_tags/"finished_studies.txt", 'w') as f:
+                for study in fsd:
+                    f.write(study+"\n")
+        except Exception as e:
+            logging.error("Exception during getting the list of finished studies\n"+e)
+

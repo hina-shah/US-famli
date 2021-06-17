@@ -15,6 +15,8 @@ class TagInfoFileTest(unittest.TestCase):
 
         self.assertEqual(taginfoinst.getNumFiles(), 5)
         self.assertEqual( len(taginfoinst.getTagForFileName('row3.dcm')), 1)
+        self.assertEqual( len(taginfoinst.getFileNamesWithTags(['M', 'ac'], tag_type='cine')), 2)
+        self.assertEqual( len(taginfoinst.getFileNamesWithTags(['M', 'ac'])), 3)
         self.assertEqual( len(taginfoinst.getFileNamesWithTag('M')), 2)
 if __name__ == '__main__':
     unittest.main()
