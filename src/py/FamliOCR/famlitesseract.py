@@ -52,7 +52,7 @@ def getTesseractTagLine(np_array, pattern = None, tag_list = None, single_line=F
 
     return final_tag
 
-def iterateThroughConfigs(input_image, pattern=None, tag_list=None, single_line=True, debug=False):
+def iterateThroughConfigs(input_image, pattern=None, tag_list=None, single_line=True, greedy=True, debug=False):
     """
     Preprocess the image and get tag extraction.
     pattern: is an RE pattern to match the text extracted. Use single_line=True with this
@@ -61,10 +61,17 @@ def iterateThroughConfigs(input_image, pattern=None, tag_list=None, single_line=
     debug: If debug is true then images will be displayed using matplotlib
     """
 
-    threshold_method = [0, 1] #0 for binary, 1 for otsu
-    scale = [1, 2] #sometimes scaling it twice helps to get the tag
-    ballsize = [0, 1, 3] # Ball size for binary dilation
-    smoothing = [0, 1] # level of smoothing. 1: pixel
+    if greedy:
+        threshold_method = [0, 1] #0 for binary, 1 for otsu
+        scale = [1, 2] #sometimes scaling it twice helps to get the tag
+        ballsize = [0, 1, 3] # Ball size for binary dilation
+        smoothing = [0, 1] # level of smoothing. 1: pixel
+    else:
+        threshold_method = [0, 1] #0 for binary, 1 for otsu
+        scale = [1, 2] #sometimes scaling it twice helps to get the tag
+        ballsize = [0] # Ball size for binary dilation
+        smoothing = [0] # level of smoothing. 1: pixel
+
     process_config = [ (t, s, b, sm)    for t in threshold_method 
                                     for s in scale 
                                     for b in ballsize 
@@ -119,7 +126,7 @@ def iterateThroughConfigs(input_image, pattern=None, tag_list=None, single_line=
     return final_tag
 
 
-def processBoundingBox(sitk_image, pattern=None, tag_list=None, debug=False):
+def processBoundingBox(sitk_image, pattern=None, tag_list=None, greedy=True, debug=False):
     
     cropped_image = sitk.RescaleIntensity(sitk_image)
 
@@ -129,17 +136,17 @@ def processBoundingBox(sitk_image, pattern=None, tag_list=None, debug=False):
         plt.show()
 
     use_single_line = pattern is not None and tag_list is None
-    final_tag = iterateThroughConfigs(cropped_image, pattern=pattern, tag_list=tag_list, single_line=use_single_line, debug=debug)
+    final_tag = iterateThroughConfigs(cropped_image, pattern=pattern, tag_list=tag_list, single_line=use_single_line, greedy=greedy, debug=debug)
     if final_tag == 'Undecided':
         # If the previous line method did not work, re do with switching the mode for single line.
         # The initial selection of using isngle lin ei based on how experimenst on whic method works best for which
         # rype of OCR task. (oattern extraction vs tag extraction)
         if debug:
             print('Trying the single line method: {}'.format(not use_single_line))
-        final_tag = iterateThroughConfigs(cropped_image, pattern=pattern, tag_list=tag_list, single_line= (not use_single_line), debug=debug)
+        final_tag = iterateThroughConfigs(cropped_image, pattern=pattern, tag_list=tag_list, single_line= (not use_single_line), greedy=greedy, debug=debug)
     return final_tag
 
-def extractTagFromFrame(np_frame, bounding_box, tag_list):
+def extractTagFromFrame(np_frame, bounding_box, tag_list, greedy=True):
     """
     Do necessary preprocessing on the numpy array, and pass it to tesseract.
     np_fram: 2d grayscale numpy array
@@ -161,5 +168,5 @@ def extractTagFromFrame(np_frame, bounding_box, tag_list):
                 [size[i] - bounding_box[1][i] for i in range(Dimension)])
     del sitk_image
     
-    final_tag = processBoundingBox(tmp_image, tag_list=tag_list)
-    return final_tag    
+    final_tag = processBoundingBox(tmp_image, tag_list=tag_list, greedy=greedy)
+    return final_tag
